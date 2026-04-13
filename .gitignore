@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+venv/
+.venv/
+*.egg-info/
+
+# Logs
+*.log
+
+# Config locale (peut contenir des données sensibles)
+config.json
+
+# macOS
+.DS_Store
+.AppleDouble
+
+# Scripts de déploiement locaux
+deploy_from_mac.sh
+deploy_custom.sh

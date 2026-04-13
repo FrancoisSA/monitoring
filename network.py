@@ -1,0 +1,204 @@
+"""
+network.py — Vérification des serveurs HTTP, détection des processus web et monitoring WiFi.
+"""
+import subprocess
+import time
+
+import psutil
+import requests as req_lib
+
+from config import WEB_NAMES, WEB_PORTS
+
+# Chemin absolu de nmcli (le service systemd a un PATH limité)
+NMCLI = "/usr/bin/nmcli"
+
+
+# ── Détection des processus web en écoute ─────────────────────────────────────
+
+def scan_web_processes() -> list:
+    """Détecte les serveurs web actifs en scannant les ports TCP en écoute."""
+    found: dict = {}
+    try:
+        for conn in psutil.net_connections(kind="inet"):
+            if conn.status != "LISTEN" or not conn.pid:
+                continue
+            port = conn.laddr.port
+            if port in found:
+                continue
+            try:
+                proc = psutil.Process(conn.pid)
+                name = proc.name()
+                if not (any(w in name.lower() for w in WEB_NAMES) or port in WEB_PORTS):
+                    continue
+                scheme = "https" if port == 443 else "http"
+                url = (f"{scheme}://localhost" if port in (80, 443)
+                       else f"{scheme}://localhost:{port}")
+                found[port] = {"name": name, "pid": conn.pid, "port": port, "url": url}
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+    except psutil.AccessDenied:
+        pass
+    return list(found.values())
+
+
+# ── Vérification HTTP ──────────────────────────────────────────────────────────
+
+def check_server(name: str, url: str, timeout: int = 5) -> dict:
+    """Vérifie la disponibilité d'un serveur HTTP et mesure sa latence."""
+    t0 = time.time()
+    try:
+        resp = req_lib.get(url, timeout=timeout, allow_redirects=True)
+        ms   = (time.time() - t0) * 1000
+        return {"name": name, "url": url, "status": resp.status_code,
+                "elapsed_ms": round(ms, 1), "ok": resp.status_code < 400, "error": None}
+    except req_lib.exceptions.ConnectionError:
+        return {"name": name, "url": url, "status": None,
+                "elapsed_ms": None, "ok": False, "error": "Connexion refusée"}
+    except req_lib.exceptions.Timeout:
+        return {"name": name, "url": url, "status": None,
+                "elapsed_ms": None, "ok": False, "error": f"Timeout >{timeout}s"}
+    except Exception as e:
+        return {"name": name, "url": url, "status": None,
+                "elapsed_ms": None, "ok": False, "error": str(e)[:50]}
+
+
+# ── Ping vers la passerelle par défaut ────────────────────────────────────────
+
+def ping_gateway() -> dict:
+    """Ping la passerelle par défaut et retourne la latence en ms.
+
+    Utilise 'ip route' pour trouver la gateway, puis 'ping -c2 -W2'.
+    Retourne {"ip": str, "latency_ms": float|None, "ok": bool}.
+    """
+    gateway = None
+    try:
+        out = subprocess.check_output(
+            ["ip", "route", "show", "default"], text=True, timeout=3
+        )
+        for line in out.splitlines():
+            parts = line.split()
+            if "via" in parts:
+                gateway = parts[parts.index("via") + 1]
+                break
+    except Exception:
+        return {"ip": None, "latency_ms": None, "ok": False}
+
+    if not gateway:
+        return {"ip": None, "latency_ms": None, "ok": False}
+
+    try:
+        out = subprocess.check_output(
+            ["ping", "-c", "2", "-W", "2", gateway],
+            text=True, timeout=6, stderr=subprocess.DEVNULL
+        )
+        # Extrait le rtt avg depuis la ligne "rtt min/avg/max/mdev = ..."
+        import re
+        m = re.search(r"rtt min/avg/max/mdev = [\d.]+/([\d.]+)/", out)
+        latency = round(float(m.group(1)), 1) if m else None
+        return {"ip": gateway, "latency_ms": latency, "ok": latency is not None}
+    except Exception:
+        return {"ip": gateway, "latency_ms": None, "ok": False}
+
+
+# ── Monitoring WiFi ────────────────────────────────────────────────────────────
+
+def get_wifi_info() -> dict:
+    """Collecte l'état de wlan0 et la liste des réseaux WiFi visibles via nmcli.
+
+    Retourne :
+      - interface : état de wlan0 (connecté, déconnecté, indisponible)
+      - networks  : liste des réseaux triés par signal décroissant
+    """
+    result = {"interface": {"state": "unknown", "connected": False}, "networks": []}
+
+    # ── État de l'interface wlan0 ──
+    try:
+        out = subprocess.check_output(
+            [NMCLI, "-t", "-f", "GENERAL.STATE,GENERAL.CONNECTION,IP4.ADDRESS",
+             "device", "show", "wlan0"],
+            text=True, timeout=5, stderr=subprocess.DEVNULL
+        )
+        state_line = next((l for l in out.splitlines() if "GENERAL.STATE" in l), "")
+        conn_line  = next((l for l in out.splitlines() if "GENERAL.CONNECTION" in l), "")
+        ip_line    = next((l for l in out.splitlines() if "IP4.ADDRESS" in l), "")
+
+        connected = ":100" in state_line  # code 100 = activé dans nmcli
+        result["interface"] = {
+            "state":      "connected" if connected else "disconnected",
+            "connected":  connected,
+            "connection": conn_line.split(":", 1)[-1].strip() if conn_line else "",
+            "ip":         ip_line.split(":", 1)[-1].strip()  if ip_line  else "",
+        }
+    except Exception:
+        result["interface"] = {"state": "unavailable", "connected": False,
+                               "connection": "", "ip": ""}
+
+    # ── Scan des réseaux visibles (cache NetworkManager, pas de scan actif) ──
+    try:
+        out = subprocess.check_output(
+            [NMCLI, "-t", "-f",
+             "IN-USE,SSID,BSSID,CHAN,FREQ,RATE,SIGNAL,SECURITY",
+             "dev", "wifi", "list"],
+            text=True, timeout=10, stderr=subprocess.DEVNULL
+        )
+        networks   = []
+        seen_bssid = set()
+
+        for line in out.splitlines():
+            parts = line.split(":")
+            if len(parts) < 13:
+                continue
+
+            # nmcli échappe les ':' du BSSID avec '\:' → parts[2..7]
+            in_use = parts[0].strip() == "*"
+            ssid   = parts[1].strip() or "<caché>"
+            bssid  = ":".join(p.lstrip("\\") for p in parts[2:8])
+            rest   = parts[8:]
+
+            if len(rest) < 4 or bssid in seen_bssid:
+                continue
+            seen_bssid.add(bssid)
+
+            chan     = rest[0].strip()
+            freq     = rest[1].strip()
+            rate     = rest[2].strip()
+            try:
+                signal = int(rest[3].strip())
+            except ValueError:
+                continue
+            security = ":".join(rest[4:]).strip() if len(rest) > 4 else ""
+
+            # Bande déduite de la fréquence
+            band = "5 GHz" if freq.startswith("5") else "2.4 GHz"
+
+            # Qualité textuelle du signal (0–100)
+            if signal >= 75:
+                quality = "Excellent"
+            elif signal >= 50:
+                quality = "Bon"
+            elif signal >= 25:
+                quality = "Faible"
+            else:
+                quality = "Très faible"
+
+            networks.append({
+                "in_use":   in_use,
+                "ssid":     ssid,
+                "bssid":    bssid,
+                "chan":     chan,
+                "freq":     freq,
+                "rate":     rate,
+                "signal":   signal,
+                "quality":  quality,
+                "security": security,
+                "band":     band,
+            })
+
+        # Réseau actif en premier, puis tri par signal décroissant
+        networks.sort(key=lambda n: (not n["in_use"], -n["signal"]))
+        result["networks"] = networks
+
+    except Exception:
+        result["networks"] = []
+
+    return result

@@ -1,0 +1,14 @@
+[Unit]
+Description=Raspberry Pi Monitor
+After=network.target
+
+[Service]
+User=fsalazar
+Group=fsalazar
+WorkingDirectory=/home/fsalazar/03-monitor
+Environment="PATH=/home/fsalazar/03-monitor/venv/bin"
+ExecStart=/home/fsalazar/03-monitor/venv/bin/python /home/fsalazar/03-monitor/web_monitor.py
+Restart=always
+
+[Install]
+WantedBy=default.target
