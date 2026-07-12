@@ -64,40 +64,72 @@ def check_server(name: str, url: str, timeout: int = 5) -> dict:
 
 # ── Ping vers la passerelle par défaut ────────────────────────────────────────
 
-def ping_gateway() -> dict:
-    """Ping la passerelle par défaut et retourne la latence en ms.
-
-    Utilise 'ip route' pour trouver la gateway, puis 'ping -c2 -W2'.
-    Retourne {"ip": str, "latency_ms": float|None, "ok": bool}.
-    """
-    gateway = None
+def _get_default_gateway():
+    """Retourne l'IP de la passerelle par défaut via 'ip route show default'."""
     try:
         out = subprocess.check_output(
-            ["ip", "route", "show", "default"], text=True, timeout=3
+            ["/usr/bin/ip", "route", "show", "default"], text=True, timeout=3
         )
         for line in out.splitlines():
             parts = line.split()
             if "via" in parts:
-                gateway = parts[parts.index("via") + 1]
-                break
+                return parts[parts.index("via") + 1]
     except Exception:
-        return {"ip": None, "latency_ms": None, "ok": False}
+        pass
+    return None
 
+
+def ping_gateway(iface: str = None) -> dict:
+    """Ping la passerelle par défaut et retourne la latence en ms.
+
+    iface : si fourni (ex: 'wlan0'), force le ping sur cette interface.
+    Retourne {"ip": str, "iface": str|None, "latency_ms": float|None, "ok": bool}.
+    """
+    import re
+    gateway = _get_default_gateway()
     if not gateway:
-        return {"ip": None, "latency_ms": None, "ok": False}
+        return {"ip": None, "iface": iface, "latency_ms": None, "ok": False}
 
     try:
-        out = subprocess.check_output(
-            ["ping", "-c", "2", "-W", "2", gateway],
-            text=True, timeout=6, stderr=subprocess.DEVNULL
-        )
-        # Extrait le rtt avg depuis la ligne "rtt min/avg/max/mdev = ..."
-        import re
+        cmd = ["/usr/bin/ping", "-c", "2", "-W", "2"]
+        if iface:
+            cmd += ["-I", iface]
+        cmd.append(gateway)
+        out = subprocess.check_output(cmd, text=True, timeout=8, stderr=subprocess.DEVNULL)
         m = re.search(r"rtt min/avg/max/mdev = [\d.]+/([\d.]+)/", out)
         latency = round(float(m.group(1)), 1) if m else None
-        return {"ip": gateway, "latency_ms": latency, "ok": latency is not None}
+        return {"ip": gateway, "iface": iface, "latency_ms": latency, "ok": latency is not None}
     except Exception:
-        return {"ip": gateway, "latency_ms": None, "ok": False}
+        return {"ip": gateway, "iface": iface, "latency_ms": None, "ok": False}
+
+
+def measure_download(url: str, size_kb: int = 1024, iface: str = "wlan0") -> dict:
+    """Mesure le débit de téléchargement réel en MB/s via curl.
+
+    Force l'interface réseau spécifiée (ex: wlan0) pour mesurer le débit WiFi réel.
+    Retourne {"speed_mbps": float|None, "elapsed_s": float, "ok": bool, "error": str|None}.
+    """
+    try:
+        cmd = [
+            "/usr/bin/curl", "-s", "-o", "/dev/null",
+            "--interface", iface,
+            "--max-time", "20",
+            "-w", "%{speed_download} %{time_total}",
+            url,
+        ]
+        out = subprocess.check_output(cmd, text=True, timeout=25, stderr=subprocess.DEVNULL)
+        parts = out.strip().split()
+        if len(parts) >= 2:
+            speed_bps  = float(parts[0])
+            elapsed    = round(float(parts[1]), 2)
+            speed_mbps = round(speed_bps / (1024 * 1024), 2)
+            return {"speed_mbps": speed_mbps, "elapsed_s": elapsed,
+                    "ok": speed_mbps > 0, "error": None}
+        return {"speed_mbps": None, "elapsed_s": 0, "ok": False, "error": "Format inattendu"}
+    except subprocess.TimeoutExpired:
+        return {"speed_mbps": None, "elapsed_s": 20, "ok": False, "error": "Timeout"}
+    except Exception as e:
+        return {"speed_mbps": None, "elapsed_s": 0, "ok": False, "error": str(e)[:60]}
 
 
 # ── Monitoring WiFi ────────────────────────────────────────────────────────────
@@ -133,7 +165,7 @@ def get_wifi_info() -> dict:
         result["interface"] = {"state": "unavailable", "connected": False,
                                "connection": "", "ip": ""}
 
-    # ── Scan des réseaux visibles (cache NetworkManager, pas de scan actif) ──
+    # ── Scan des réseaux WiFi (cache NetworkManager, mis à jour passivement) ──
     try:
         out = subprocess.check_output(
             [NMCLI, "-t", "-f",

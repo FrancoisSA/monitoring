@@ -9,6 +9,8 @@ Lancement :
 """
 
 import argparse
+import json
+import os
 import socket
 import subprocess
 import threading
@@ -17,7 +19,7 @@ from datetime import datetime
 from flask import Flask, jsonify, request, Response
 
 import state
-from config    import KNOWN_SERVICES
+from config    import KNOWN_SERVICES, CONFIG_FILE
 from dashboard import HTML_DASHBOARD
 from disk      import scan_directory
 
@@ -57,7 +59,7 @@ def api_service(name: str, action: str):
         return jsonify({"ok": False, "error": "Action invalide"}), 400
     try:
         r = subprocess.run(
-            ["sudo", "systemctl", action, name],
+            ["/usr/bin/sudo", "/usr/bin/systemctl", action, name],
             capture_output=True, text=True, timeout=15,
         )
         return jsonify({"ok": r.returncode == 0, "stdout": r.stdout, "stderr": r.stderr})
@@ -74,21 +76,147 @@ def api_temperature(toggle: str):
     return jsonify({"ok": True, "monitor_temperature": state.monitor_temperature})
 
 
-@app.route("/api/wifi/monitor", methods=["POST"])
-def api_wifi_monitor():
-    """Sélectionne un SSID à surveiller (ou None pour arrêter).
+@app.route("/api/config")
+def api_config_get():
+    """Retourne la configuration complète (config.json)."""
+    try:
+        with open(CONFIG_FILE) as f:
+            return jsonify(json.load(f))
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
-    Body JSON : {"ssid": "Livebox-2A30"} ou {"ssid": null}
+
+@app.route("/api/config/wifi", methods=["POST"])
+def api_config_wifi():
+    """Met à jour les paramètres WiFi, persiste dans config.json et les applique à chaud.
+
+    Body JSON : {"scan_interval_s": 30, "history_minutes": 30,
+                 "alert_threshold_pts": 20, "alert_window": 5}
     """
     body = request.get_json(silent=True) or {}
-    ssid = body.get("ssid") or None
-    state.set_monitored_ssid(ssid)
-    return jsonify({"ok": True, "monitored_ssid": ssid})
+
+    # Validation des paramètres principaux
+    rules = {
+        "scan_interval_s":     (int, 5,   3600),
+        "history_minutes":     (int, 1,   1440),
+        "alert_threshold_pts": (int, 1,   100),
+        "alert_window":        (int, 2,   60),
+    }
+    wcfg = {}
+    for key, (typ, lo, hi) in rules.items():
+        if key in body:
+            try:
+                val = typ(body[key])
+                if not (lo <= val <= hi):
+                    return jsonify({"ok": False, "error": f"{key} hors bornes ({lo}–{hi})"}), 400
+                wcfg[key] = val
+            except (ValueError, TypeError):
+                return jsonify({"ok": False, "error": f"{key} invalide"}), 400
+
+    # Validation de la section download (optionnelle)
+    if "download" in body:
+        dl_body = body["download"]
+        dl_rules = {
+            "size_kb":    (int,  64, 10240),
+            "interval_s": (int,  30, 86400),
+        }
+        dl = {}
+        if "enabled" in dl_body:
+            dl["enabled"] = bool(dl_body["enabled"])
+        if "url" in dl_body:
+            dl["url"] = str(dl_body["url"])[:500]
+        for key, (typ, lo, hi) in dl_rules.items():
+            if key in dl_body:
+                try:
+                    val = typ(dl_body[key])
+                    if not (lo <= val <= hi):
+                        return jsonify({"ok": False, "error": f"download.{key} hors bornes ({lo}–{hi})"}), 400
+                    dl[key] = val
+                except (ValueError, TypeError):
+                    return jsonify({"ok": False, "error": f"download.{key} invalide"}), 400
+        wcfg["download"] = dl
+
+    # Lecture, fusion et écriture de config.json
+    try:
+        with open(CONFIG_FILE) as f:
+            cfg = json.load(f)
+        cfg["wifi"] = {**cfg.get("wifi", {}), **wcfg}
+        with open(CONFIG_FILE, "w") as f:
+            json.dump(cfg, f, indent=2)
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"Écriture config : {e}"}), 500
+
+    # Application immédiate sans redémarrage
+    state.reload_wifi_config(cfg["wifi"])
+    return jsonify({"ok": True, "wifi": cfg["wifi"]})
 
 
-@app.route("/api/scan/<path:mountpoint>")
-def api_scan(mountpoint: str):
-    """Analyse les tailles de dossiers sur un point de montage."""
+@app.route("/api/services/refresh", methods=["POST"])
+def api_services_refresh():
+    """Déclenche une collecte immédiate des services systemd (au prochain cycle bg_loop, ~2s)."""
+    state.force_services_refresh()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/samba/restart", methods=["POST"])
+def api_samba_restart():
+    """Redémarre smbd et nmbd immédiatement via systemctl."""
+    results = []
+    for svc in ("smbd", "nmbd"):
+        try:
+            r = subprocess.run(
+                ["/usr/bin/sudo", "/usr/bin/systemctl", "restart", svc],
+                capture_output=True, text=True, timeout=15,
+            )
+            results.append({"svc": svc, "ok": r.returncode == 0, "stderr": r.stderr.strip()})
+        except Exception as e:
+            results.append({"svc": svc, "ok": False, "stderr": str(e)})
+    all_ok = all(r["ok"] for r in results)
+    # Force une mise à jour de l'état Samba dans le prochain cycle
+    state.force_services_refresh()
+    return jsonify({"ok": all_ok, "results": results,
+                    "error": "; ".join(r["stderr"] for r in results if not r["ok"]) or None})
+
+
+@app.route("/api/wifi/rescan", methods=["POST"])
+def api_wifi_rescan():
+    """Force un scan WiFi actif via nmcli."""
+    try:
+        subprocess.run(
+            ["/usr/bin/sudo", "/usr/bin/nmcli", "dev", "wifi", "rescan"],
+            capture_output=True, text=True, timeout=10
+        )
+        return jsonify({"ok": True})
+    except subprocess.TimeoutExpired:
+        return jsonify({"ok": False, "error": "Timeout nmcli rescan"}), 500
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/wifi/monitor", methods=["POST"])
+def api_wifi_monitor():
+    """Ajoute ou supprime un SSID de la liste de surveillance.
+
+    Body JSON : {"ssid": "Livebox-2A30", "watch": true}  → démarre la surveillance
+                {"ssid": "Livebox-2A30", "watch": false} → arrête la surveillance
+    """
+    body = request.get_json(silent=True) or {}
+    ssid = body.get("ssid")
+    if not ssid:
+        return jsonify({"ok": False, "error": "ssid requis"}), 400
+    watch = bool(body.get("watch", True))
+    state.toggle_monitored_ssid(ssid, watch)
+    return jsonify({"ok": True, "monitored_ssids": list(state.monitored_ssids)})
+
+
+@app.route("/api/scan")
+def api_scan():
+    """Analyse les tailles de dossiers sur un point de montage.
+    Paramètre GET : path (ex: /home ou /)
+    """
+    mountpoint = request.args.get("path", "").strip()
+    if not mountpoint:
+        return jsonify({"error": "Paramètre 'path' manquant"}), 400
     if not mountpoint.startswith("/"):
         mountpoint = "/" + mountpoint
     try:
@@ -98,6 +226,23 @@ def api_scan(mountpoint: str):
         return jsonify(result)
     except Exception as e:
         return jsonify({"error": f"Erreur lors de l'analyse : {e}"}), 500
+
+
+@app.route("/api/speedtest")
+def api_speedtest():
+    """Sert des données aléatoires pour les tests de débit WiFi.
+    Paramètre GET : size_kb (défaut 1024, max 10240).
+    Usage : configurer l'URL de test sur http://<eth0-ip>:9090/api/speedtest
+    Le trafic passe alors par wlan0 → AP → eth0, mesurant le vrai débit WiFi.
+    """
+    try:
+        size_kb = min(max(1, int(request.args.get("size_kb", 1024))), 10240)
+    except (ValueError, TypeError):
+        size_kb = 1024
+    data = os.urandom(size_kb * 1024)
+    resp = Response(data, mimetype="application/octet-stream")
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
 
 
 @app.route("/diag")

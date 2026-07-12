@@ -5,9 +5,13 @@ import configparser
 import os
 import socket
 import subprocess
+import time
 from datetime import datetime
 
 from config import KNOWN_SERVICES, SMB_CONF, SMB_META_SECTIONS
+
+# Chemin absolu — le service systemd a un PATH limité à venv/bin
+SYSTEMCTL = "/usr/bin/systemctl"
 
 
 def get_services_status() -> list:
@@ -16,7 +20,7 @@ def get_services_status() -> list:
     for svc in KNOWN_SERVICES:
         try:
             r = subprocess.run(
-                ["systemctl", "show", svc["service"],
+                [SYSTEMCTL, "show", svc["service"],
                  "--property=ActiveState,ActiveEnterTimestamp"],
                 capture_output=True, text=True, timeout=5,
             )
@@ -43,7 +47,7 @@ def get_samba_status() -> dict:
     for svc in ("smbd", "nmbd"):
         try:
             out = subprocess.check_output(
-                ["systemctl", "is-active", svc], text=True, timeout=3
+                [SYSTEMCTL, "is-active", svc], text=True, timeout=3
             ).strip()
         except subprocess.CalledProcessError as e:
             out = e.output.strip() if e.output else "inactive"
@@ -51,6 +55,43 @@ def get_samba_status() -> dict:
             out = "unknown"
         result[svc] = out
     return result
+
+
+def watchdog_samba() -> list:
+    """Vérifie smbd et nmbd ; redémarre tout démon non actif.
+
+    Retourne la liste des événements de ce cycle :
+      [{"svc": "smbd", "action": "restarted"|"ok"|"failed", "ts": float, "time": str}]
+    """
+    events = []
+    now_str = datetime.now().strftime("%d/%m %H:%M")
+    for svc in ("smbd", "nmbd"):
+        # Lecture de l'état courant
+        try:
+            out = subprocess.check_output(
+                [SYSTEMCTL, "is-active", svc], text=True, timeout=3
+            ).strip()
+        except subprocess.CalledProcessError as e:
+            out = e.output.strip() if e.output else "inactive"
+        except Exception:
+            out = "unknown"
+
+        if out == "active":
+            events.append({"svc": svc, "action": "ok", "ts": time.time(), "time": now_str})
+            continue
+
+        # Démon non actif → tentative de redémarrage
+        try:
+            r = subprocess.run(
+                ["/usr/bin/sudo", SYSTEMCTL, "restart", svc],
+                capture_output=True, text=True, timeout=15,
+            )
+            action = "restarted" if r.returncode == 0 else "failed"
+        except Exception:
+            action = "failed"
+
+        events.append({"svc": svc, "action": action, "ts": time.time(), "time": now_str})
+    return events
 
 
 def get_smb_shares() -> list:

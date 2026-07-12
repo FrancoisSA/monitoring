@@ -1,12 +1,38 @@
 """
 system.py — Collecte des métriques système : CPU, RAM, disques, processus et I/O.
 """
+import os
 import socket
 import time
 
 import psutil
 
 from config import WATCH_DISK, WATCH_NIC
+
+# Interpréteurs dont on veut afficher l'argument principal (le script lancé)
+_INTERPRETERS = {"python", "python3", "node", "nodejs", "ruby", "perl", "php",
+                 "bash", "sh", "java", "gunicorn", "uvicorn"}
+
+
+def _display_name(name: str, cmdline: list) -> str:
+    """Construit un nom lisible pour les interpréteurs.
+
+    'python' + ['/home/pi/app.py'] → 'python · app.py'
+    Autres processus → nom inchangé.
+    """
+    base = name.lower().split(".")[0]  # python3.11 → python3 → hors liste, mais python3 aussi
+    if base not in _INTERPRETERS and name.lower() not in _INTERPRETERS:
+        return name
+    if not cmdline or len(cmdline) < 2:
+        return name
+    for arg in cmdline[1:]:
+        if arg.startswith("-"):
+            continue
+        label = os.path.basename(arg)
+        if label and label != name:
+            return f"{name} · {label}"
+        break
+    return name
 
 
 # ── Métriques système ──────────────────────────────────────────────────────────
@@ -42,11 +68,18 @@ def get_system_stats(monitor_temp: bool = True) -> dict:
 
 
 def get_top_cpu_procs(n: int = 10) -> list:
-    """Retourne les n processus les plus gourmands en CPU."""
+    """Retourne les n processus les plus gourmands en CPU.
+
+    Enrichit les interpréteurs (python, node…) avec le nom du script lancé.
+    """
     procs = []
-    for p in psutil.process_iter(["pid", "name", "cpu_percent", "memory_percent"]):
+    for p in psutil.process_iter(["pid", "name", "cpu_percent", "memory_percent", "cmdline"]):
         try:
-            procs.append(p.info)
+            info = p.info
+            info["display_name"] = _display_name(
+                info.get("name") or "", info.get("cmdline") or []
+            )
+            procs.append(info)
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             continue
     return sorted(procs, key=lambda x: x["cpu_percent"] or 0, reverse=True)[:n]

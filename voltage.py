@@ -17,7 +17,7 @@ def get_voltage() -> dict:
     volt, throttled = None, 0
 
     try:
-        out = subprocess.check_output(["vcgencmd", "measure_volts", "core"],
+        out = subprocess.check_output(["/usr/bin/vcgencmd", "measure_volts", "core"],
                                       text=True, timeout=2)
         m = re.search(r"volt=([\d.]+)V", out)
         if m:
@@ -26,7 +26,7 @@ def get_voltage() -> dict:
         pass
 
     try:
-        out = subprocess.check_output(["vcgencmd", "get_throttled"],
+        out = subprocess.check_output(["/usr/bin/vcgencmd", "get_throttled"],
                                       text=True, timeout=2)
         m = re.search(r"throttled=(0x[0-9a-fA-F]+)", out)
         if m:

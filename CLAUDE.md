@@ -8,8 +8,19 @@ Interface web Flask sur `http://FSA-PI5.local:9090`
 ## Accès SSH
 
 ```bash
+# Réseau local
 ssh -i ~/.ssh/id_ed25519 fsalazar@FSA-PI5.local
+
+# Depuis l'extérieur (Tailscale)
+ssh -i ~/.ssh/id_ed25519 fsalazar@100.81.42.20
 ```
+
+## Tailscale
+
+- **IP** : `100.81.42.20` — nom : `fsa-pi5-1`
+- **Dashboard externe** : `http://100.81.42.20:9090`
+- Installé le 13/04/2026 — compte `francois.salazar@`
+- Fix disque USB (JMicron JMS567) : `usb-storage.quirks=152d:0562:u` ajouté dans `/boot/firmware/cmdline.txt` pour désactiver UAS et éviter le démontage intempestif de `/mnt/timecapsule`
 
 ## Architecture
 
@@ -83,7 +94,13 @@ Fichiers de setup pour transformer le Pi en serveur de sauvegarde Time Machine m
 - Modèle annoncé : `TimeCapsule8,119`
 - Quota configuré dans `smb.conf` : `fruit:time machine max size = 500G`
 - Connexion macOS Time Machine → Sélectionner disque → login `timemachine`
-- Connexion Finder : `smb://192.168.1.60/fsalazar` (IP directe, plus fiable que `.local`)
+- Connexion Finder : `smb://10.0.0.2/fsalazar` (IP directe, plus fiable que `.local`)
+
+**Incident réseau (12/07/2026) — nouveau routeur, Time Machine perdait le serveur :**
+- Nouveau routeur installé sur `10.0.0.0/24` (remplace l'ancien `192.168.1.0/24`)
+- `smb.conf` a `interfaces = lo eth0` + `bind interfaces only = yes` → Samba reste bindé sur l'IP qu'avait `eth0` au démarrage du service. Après un changement de routeur/IP, `smbd`/`nmbd` restent sur l'ancienne IP (invisible) tant qu'ils ne sont pas redémarrés.
+- Fix : `sudo systemctl restart smbd nmbd` pour rebinder sur l'IP actuelle, **puis** IP statique posée sur le Pi (`nmcli con mod "Wired connection 1" ipv4.method manual ipv4.addresses 10.0.0.2/24 ipv4.gateway 10.0.0.1 ipv4.dns 10.0.0.1`) pour que l'IP ne redérive plus.
+- Réflexe à avoir après tout changement de routeur/réseau : vérifier `ip addr show eth0` sur le Pi vs `ss -tlnp | grep -E ':445|:139'` — si l'IP écoutée par smbd ne correspond plus à l'IP actuelle de l'interface, redémarrer Samba.
 
 **Correctif Avahi IPv6 (13/04/2026) :**
 - `use-ipv6=no` dans `/etc/avahi/avahi-daemon.conf` pour forcer IPv4
@@ -102,10 +119,11 @@ hdmi_drive=2           # mode HDMI plein (son + image)
 
 ## Points d'attention
 
-- `wlan0` est **déconnecté** — le Pi tourne sur `eth0` (filaire), IP : `192.168.1.60`
+- Le Pi tourne sur `eth0` (filaire), IP statique fixée à `10.0.0.2/24` (gateway `10.0.0.1`, nouveau routeur depuis 12/07/2026)
+- `wlan0` reste configuré (SSID `Livebox-2A30` vu en secours) mais `eth0` est prioritaire (métrique de route plus basse)
 - Le scan WiFi via `nmcli` tourne toutes les **30s** pour ne pas surcharger
 - La détection de chute de signal : alerte si signal < moyenne(5 derniers) - 20 pts
-- SSH de secours via IP : `ssh -i ~/.ssh/id_ed25519 fsalazar@192.168.1.60` (si `.local` ne résout pas)
+- SSH de secours via IP : `ssh -i ~/.ssh/id_ed25519 fsalazar@10.0.0.2` (si `.local` ne résout pas)
 
 ## RELEASE
 
@@ -114,3 +132,6 @@ Lorsqu'une release est demandée :
 2. Ajouter des commentaires pour qu'un humain puisse comprendre
 3. Mettre à jour le manuel utilisateur (`Pi Monitor vX.Y.md`) avec date et numéro de version
 4. Pousser dans git — si pas de repo, demander si l'utilisateur veut le créer
+
+## MEMORY
+ Quand je te demande de mémoriser l'état du projet, ou que je te donne la commande MEMORY : Mémorise un ésumé des échanges dans MEMORY.md afin de pouvoir reprendre la conversation plus tard. Stocke les informations qui te permetrons de retrouver le contexte.

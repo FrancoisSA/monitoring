@@ -18,7 +18,7 @@ Pi Monitor est un tableau de bord de surveillance pour Raspberry Pi 5. Il offre 
 | Interface | URL |
 |-----------|-----|
 | Dashboard web | http://FSA-PI5.local:9090 |
-| Dashboard web (IP) | http://192.168.1.60:9090 |
+| Dashboard web (IP Fixe) | http://10.0.0.2:9090 |
 | Page de diagnostic | http://FSA-PI5.local:9090/diag |
 
 **SSH (depuis le Mac) :**
