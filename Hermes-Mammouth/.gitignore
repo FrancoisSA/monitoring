@@ -1,0 +1,47 @@
+# Hermes Agent via Mammouth AI - .gitignore
+
+# Variables d'environnement (secrets)
+.env
+*.local.md
+
+# Fichiers Python compilés
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# IDE / Éditeurs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Fichiers de logs
+logs/
+*.log
+*.txt
+# ... sauf les fichiers du projet
+!requirements.txt
+
+# Fichiers temporaires
+*.tmp
+*.temp
+.DS_Store
+.AppleDouble
+
+# Fichiers de débogage
+*.pytb
+.hypothesis/
+
+# Ollama (si utilisé en local)
+ollama/
+
+# Environnements virtuels Python
+venv/
+.venv/
+
+# Fichiers de sauvegarde automatique
+*.bak
+*.backup

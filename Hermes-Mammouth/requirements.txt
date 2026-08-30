@@ -1,0 +1,10 @@
+# Hermes Agent via Mammouth AI - Dépendances
+
+# SDK Mistral (OpenAI-compatible) pour appeler Mammouth AI
+mistralai>=1.0.0
+
+# Gestion des variables d'environnement
+python-dotenv>=1.0.0
+
+# Logging et utilitaires
+rich>=13.0.0  # Pour l'affichage coloré en terminal

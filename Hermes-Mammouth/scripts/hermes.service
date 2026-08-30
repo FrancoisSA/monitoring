@@ -1,0 +1,22 @@
+[Unit]
+Description=Hermes Agent (Mammouth AI) - API web de chat
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=fsalazar
+Group=fsalazar
+WorkingDirectory=/home/fsalazar/03-hermes-mammouth
+
+# Clé API et config lues depuis .env (MAMMOUTH_API_KEY, MAMMOUTH_MODEL, ...)
+EnvironmentFile=/home/fsalazar/03-hermes-mammouth/.env
+
+# API Flask de chat (dashboard web + /api/chat)
+ExecStart=/home/fsalazar/03-hermes-mammouth/venv/bin/python -m src.api
+
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
