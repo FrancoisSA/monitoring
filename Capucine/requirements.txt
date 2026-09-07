@@ -1,0 +1,6 @@
+# Capucine — framework agentique (assistant Telegram)
+# Dépendances volontairement minimales : pas de SDK Telegram ni de framework
+# agentique lourd (contrainte de légèreté sur le Raspberry Pi).
+
+requests>=2.31.0
+python-dotenv>=1.0.0

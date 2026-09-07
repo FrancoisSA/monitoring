@@ -1,0 +1,21 @@
+[Unit]
+Description=Capucine — assistant agentique Telegram
+After=network-online.target ollama.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=fsalazar
+Group=fsalazar
+WorkingDirectory=/home/fsalazar/04-capucine
+
+# Config lue depuis .env (TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, OLLAMA_MODEL, ...)
+EnvironmentFile=/home/fsalazar/04-capucine/.env
+
+ExecStart=/home/fsalazar/04-capucine/venv/bin/python -m capucine.service
+
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
