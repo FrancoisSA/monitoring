@@ -1,4 +1,4 @@
-# Pi Monitor — CLAUDE.md
+# Pi Monitor — AGENTS.md
 
 ## Projet
 
@@ -26,24 +26,24 @@ ssh -i ~/.ssh/id_ed25519 fsalazar@100.81.42.20
 
 | Fichier | Rôle |
 |---|---|
-| `web_monitor.py` | Point d'entrée Flask + routes API |
-| `state.py` | État global partagé + thread de collecte |
-| `config.py` | Constantes et chargement config.json |
-| `system.py` | CPU, RAM, disques, processus, IoTracker |
-| `services.py` | Services systemd, Samba |
-| `network.py` | HTTP check, scan WiFi, ping gateway |
-| `voltage.py` | Tension cœur + VoltageHistory |
-| `disk.py` | Analyse récursive de dossiers |
-| `dashboard.py` | Template HTML du dashboard |
+| `Monitor/src/web_monitor.py` | Point d'entrée Flask + routes API |
+| `Monitor/src/state.py` | État global partagé + thread de collecte |
+| `Monitor/src/config.py` | Constantes et chargement config.json |
+| `Monitor/src/system.py` | CPU, RAM, disques, processus, IoTracker |
+| `Monitor/src/services.py` | Services systemd, Samba |
+| `Monitor/src/network.py` | HTTP check, scan WiFi, ping gateway |
+| `Monitor/src/voltage.py` | Tension cœur + VoltageHistory |
+| `Monitor/src/disk.py` | Analyse récursive de dossiers |
+| `Monitor/src/dashboard.py` | Template HTML du dashboard |
 
 ## Déploiement (4 étapes)
 
 ```bash
-# 1. Rsync
+# 1. Rsync (depuis Monitor/)
 rsync -av --exclude='.git' --exclude='__pycache__' --exclude='*.pyc' \
-  --exclude='deploy_from_mac.sh' --exclude='deploy_custom.sh' \
+  --exclude='scripts/deploy_from_mac.sh' --exclude='scripts/deploy_custom.sh' \
   -e "ssh -i ~/.ssh/id_ed25519 -o ServerAliveInterval=10" \
-  ./ fsalazar@FSA-PI5.local:/home/fsalazar/03-monitor/
+  ./Monitor/ fsalazar@FSA-PI5.local:/home/fsalazar/03-monitor/
 
 # 2. (pas de package.json — projet Python, skip)
 
@@ -56,16 +56,15 @@ ssh -i ~/.ssh/id_ed25519 fsalazar@FSA-PI5.local "sudo journalctl -u monitor -n 2
 
 Informer l'utilisateur quand le service a été relancé.
 
-## Hermes Agent (Mistral AI)
+## Hermes Agent (Mistral AI) — abandonné
 
 Assistant personnel (LLM cloud Hermes/Mistral) installé sur le Pi le 30/08/2026, migré de Mammouth AI vers Mistral AI direct le même jour.
-Source : `Hermes-Pi/` dans ce repo (anciennement `Hermes-Mammouth/`). Web chat : `http://10.0.0.2:9191` (port 9191).
+Le dossier source (`Hermes-Pi/`, anciennement `Hermes-Mammouth/`) a été supprimé de ce repo le 09/09/2026 (projet abandonné) — son `.env` a été extrait vers `.env.hermes-pi.local` (racine du repo, ignoré par git) avant suppression.
 
-- **Répertoire** : `/home/fsalazar/hermes-pi/` (venv dans `venv/`, anciennement `/home/fsalazar/03-hermes-mammouth/`)
-- **Service** : `hermes.service` → `venv/bin/python -m src.api` (API Flask, dashboard + `/api/chat`)
+Infos infra conservées à titre de mémoire si le service tourne encore sur le Pi (`ssh fsalazar@FSA-PI5.local "sudo systemctl status hermes"` pour vérifier, et l'arrêter/désinstaller si inutile) :
+- **Répertoire sur le Pi** : `/home/fsalazar/hermes-pi/` (venv dans `venv/`, anciennement `/home/fsalazar/03-hermes-mammouth/`)
+- **Service** : `hermes.service` → `venv/bin/python -m src.api` (API Flask, dashboard + `/api/chat`), web chat sur `http://10.0.0.2:9191`
 - **Config** : `.env` à la racine du projet sur le Pi — `MISTRAL_API_KEY` (obligatoire), `MISTRAL_MODEL`
-- **Déploiement** : rsync du dossier `Hermes-Pi/` vers `hermes-pi/` puis `sudo systemctl restart hermes`
-- **Mistral SDK** : mistralai 2.x n'expose plus `Mistral` à la racine ni `ToolDefinition` → imports compat dans `src/hermes_agent.py` et `src/api.py`
 
 ## Infra Pi
 
