@@ -1,0 +1,22 @@
+{
+  "servers": [
+    {"name": "Local Nginx", "url": "http://localhost"},
+    {"name": "Local App",   "url": "http://localhost:8080"}
+  ],
+  "timeout": 5,
+  "monitor_temperature": true,
+  "wifi_ssids": ["Livebox-2A30"],
+  "wifi": {
+    "scan_interval_s":      30,
+    "history_minutes":      30,
+    "alert_threshold_pts":  20,
+    "alert_window":          5,
+    "ping_iface":            "wlan0",
+    "download": {
+      "enabled":   false,
+      "url":       "",
+      "size_kb":   1024,
+      "interval_s": 300
+    }
+  }
+}

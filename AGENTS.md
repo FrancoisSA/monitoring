@@ -56,6 +56,17 @@ ssh -i ~/.ssh/id_ed25519 fsalazar@FSA-PI5.local "sudo journalctl -u monitor -n 2
 
 Informer l'utilisateur quand le service a été relancé.
 
+## Hermes Agent (Mistral AI)
+
+Assistant personnel (LLM cloud Hermes/Mistral) installé sur le Pi le 30/08/2026, migré de Mammouth AI vers Mistral AI direct le même jour.
+Source : `Hermes-Pi/` dans ce repo (anciennement `Hermes-Mammouth/`). Web chat : `http://10.0.0.2:9191` (port 9191).
+
+- **Répertoire** : `/home/fsalazar/hermes-pi/` (venv dans `venv/`, anciennement `/home/fsalazar/03-hermes-mammouth/`)
+- **Service** : `hermes.service` → `venv/bin/python -m src.api` (API Flask, dashboard + `/api/chat`)
+- **Config** : `.env` à la racine du projet sur le Pi — `MISTRAL_API_KEY` (obligatoire), `MISTRAL_MODEL`
+- **Déploiement** : rsync du dossier `Hermes-Pi/` vers `hermes-pi/` puis `sudo systemctl restart hermes`
+- **Mistral SDK** : mistralai 2.x n'expose plus `Mistral` à la racine ni `ToolDefinition` → imports compat dans `src/hermes_agent.py` et `src/api.py`
+
 ## Infra Pi
 
 - **Service** : `monitor.service` dans `/etc/systemd/system/`
@@ -137,13 +148,3 @@ Lorsqu'une release est demandée :
 
 ## MEMORY
  Quand je te demande de mémoriser l'état du projet, ou que je te donne la commande MEMORY : Mémorise un ésumé des échanges dans MEMORY.md afin de pouvoir reprendre la conversation plus tard. Stocke les informations qui te permetrons de retrouver le contexte.
-
-## Agent skills
-
-### Issue tracker
-
-Issues et specs en markdown local dans `docs/spec/`. See `docs/agents/issue-tracker.md`.
-
-### Domain docs
-
-Contexte unique (single-context) : `CONTEXT.md` + `docs/adr/` à la racine. See `docs/agents/domain.md`.

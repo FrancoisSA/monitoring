@@ -50,21 +50,34 @@ def api_stats():
 
 
 @app.route("/api/service/<name>/<action>", methods=["POST"])
-def api_service(name: str, action: str):
-    """Exécute une action systemd sur un service connu (start | stop | restart)."""
-    known = {s["service"] for s in KNOWN_SERVICES}
-    if name not in known:
-        return jsonify({"ok": False, "error": "Service inconnu"}), 404
-    if action not in ("start", "stop", "restart"):
-        return jsonify({"ok": False, "error": "Action invalide"}), 400
+def api_control_service(name, action):
+    """Contrôleur pour démarrer, arrêter ou redémarrer un service système."""
+    allowed_actions = ["start", "stop", "restart"]
+    if action not in allowed_actions:
+        return jsonify({"error": f"Action '{action}' non valide. Doit être l'un de : {', '.join(allowed_actions)}"}), 400
+
+    # Ici, on devrait idéalement appeler une fonction dans services.py
+    # qui gère la complexité SSH/sudo pour s'assurer que l'exécution est correcte.
+    # Pour l'implémentation initiale, nous simulons un appel systemctl direct.
+    command = f"sudo systemctl {action} {name}"
+
     try:
-        r = subprocess.run(
-            ["/usr/bin/sudo", "/usr/bin/systemctl", action, name],
-            capture_output=True, text=True, timeout=15,
+        print(f"Tentative d'exécution de la commande : {command}")
+        # Exécution du processus système pour le contrôle
+        result = subprocess.run(
+            command, shell=True, capture_output=True, text=True, check=True
         )
-        return jsonify({"ok": r.returncode == 0, "stdout": r.stdout, "stderr": r.stderr})
+        return jsonify({
+            "status": "success",
+            "message": f"Service '{name}' {action} réussi.",
+            "output": result.stdout
+        })
+
+    except subprocess.CalledProcessError as e:
+        error_msg = f"Erreur lors du contrôle du service '{name}' : {e.stderr}"
+        return jsonify({"status": "error", "message": error_msg, "details": e.output}), 500
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 500
+        return jsonify({"status": "fatal_error", "message": f"Une erreur imprévue est survenue : {str(e)}"}), 500
 
 
 @app.route("/api/temperature/<toggle>", methods=["POST"])

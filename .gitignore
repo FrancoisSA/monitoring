@@ -2,20 +2,60 @@
 __pycache__/
 *.py[cod]
 *.pyo
+*.pyc
 venv/
 .venv/
+.env/
 *.egg-info/
 
 # Logs
 *.log
+logs/
 
 # Config locale (peut contenir des données sensibles)
-config.json
+.claude/settings.local.json
+.secrets/
+
+# Documentation locale (à ne pas versionner)
+docs/config.json
+
+# Scripts de déploiement locaux (optionnel à versionner)
+Monitor/scripts/deploy_from_mac.sh
+Monitor/scripts/deploy_custom.sh
+
+# Notes locales / indices de secrets — jamais versionné
+*.local.md
+.env.*.local
 
 # macOS
 .DS_Store
 .AppleDouble
 
-# Scripts de déploiement locaux
-deploy_from_mac.sh
-deploy_custom.sh
+# IDE / Éditeurs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Fichiers temporaires
+*.tmp
+*.bak
+*.swp
+*.pyc
+
+# Build artifacts
+build/
+dist/
+
+# TimeCapsule (à ne pas versionner - config spécifique au Pi)
+TimeCapsule/
+
+# Hermes (analyse temporaire)
+Hermes/
+
+# État local d'outils agentiques (plans de session, scratch)
+.zcode/
+
+# Sauvegardes de secrets (clés SSH, tokens, config QwenPaw) — jamais versionné
+_backups/
