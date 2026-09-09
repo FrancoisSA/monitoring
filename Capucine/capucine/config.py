@@ -8,7 +8,33 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
-from dotenv import load_dotenv
+from dotenv import find_dotenv, load_dotenv
+
+# Flux RSS suivis par défaut par l'agent /presse (automobile électrique),
+# reconfigurables via PRESSE_FEEDS sans toucher au code.
+_DEFAULT_PRESSE_FEEDS = (
+    "https://www.automobile-propre.com/feed/",
+    "https://electrek.co/feed/",
+    "https://insideevs.com/rss/articles/all/",
+    "https://cleantechnica.com/feed/",
+)
+
+# Requêtes de veille par défaut pour l'agent /renault, reconfigurables via
+# RENAULT_SEARCH_QUERIES sans toucher au code. La phrase entre guillemets
+# pour Ampere évite la confusion avec l'unité de courant électrique.
+_DEFAULT_RENAULT_QUERIES = (
+    "Renault véhicules électriques",
+    '"Renault Ampere"',
+)
+
+# Flux RSS suivis par défaut par l'agent /ia (actualité IA & frameworks
+# agentiques), reconfigurables via IA_FEEDS sans toucher au code.
+_DEFAULT_IA_FEEDS = (
+    "https://simonwillison.net/atom/everything/",
+    "https://huggingface.co/blog/feed.xml",
+    "https://openai.com/blog/rss.xml",
+    "https://www.interconnects.ai/feed",
+)
 
 
 @dataclass(frozen=True)
@@ -19,10 +45,27 @@ class Config:
     ollama_model: str
     ollama_timeout: int
     db_path: str
+    presse_feeds: "list[str]"
+    socket_path: str
+    presse_llm_timeout: int
+    renault_search_queries: "list[str]"
+    renault_llm_timeout: int
+    ia_feeds: "list[str]"
+    ia_llm_timeout: int
+
+
+def _parse_comma_separated(raw: "str | None", default: "tuple[str, ...]") -> "list[str]":
+    if not raw:
+        return list(default)
+    return [item.strip() for item in raw.split(",") if item.strip()]
 
 
 def load_config() -> Config:
-    load_dotenv()
+    # usecwd=True : cherche .env depuis le répertoire courant, pas depuis
+    # l'emplacement de ce fichier (défaut de find_dotenv) — sans ça, un test
+    # qui fait chdir() vers un répertoire vide peut quand même charger le
+    # vrai .env du projet en remontant l'arborescence depuis capucine/.
+    load_dotenv(find_dotenv(usecwd=True))
 
     token = os.getenv("TELEGRAM_BOT_TOKEN")
     chat_id = os.getenv("TELEGRAM_CHAT_ID")
@@ -39,4 +82,13 @@ def load_config() -> Config:
         ollama_model=os.getenv("OLLAMA_MODEL", "qwen2.5:3b"),
         ollama_timeout=int(os.getenv("OLLAMA_TIMEOUT", "60")),
         db_path=os.getenv("CAPUCINE_DB_PATH", "capucine.db"),
+        presse_feeds=_parse_comma_separated(os.getenv("PRESSE_FEEDS"), _DEFAULT_PRESSE_FEEDS),
+        socket_path=os.getenv("CAPUCINE_SOCKET_PATH", "/tmp/capucine.sock"),
+        presse_llm_timeout=int(os.getenv("PRESSE_LLM_TIMEOUT", "420")),
+        renault_search_queries=_parse_comma_separated(
+            os.getenv("RENAULT_SEARCH_QUERIES"), _DEFAULT_RENAULT_QUERIES
+        ),
+        renault_llm_timeout=int(os.getenv("RENAULT_LLM_TIMEOUT", "420")),
+        ia_feeds=_parse_comma_separated(os.getenv("IA_FEEDS"), _DEFAULT_IA_FEEDS),
+        ia_llm_timeout=int(os.getenv("IA_LLM_TIMEOUT", "420")),
     )

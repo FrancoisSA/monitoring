@@ -35,6 +35,16 @@ class Store:
                 )
                 """
             )
+            self._conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS seen_links (
+                    agent TEXT NOT NULL,
+                    link TEXT NOT NULL,
+                    seen_at TEXT NOT NULL DEFAULT (datetime('now')),
+                    PRIMARY KEY (agent, link)
+                )
+                """
+            )
 
     def save_history(self, agent: str, role: str, content: str) -> None:
         with self._conn:
@@ -50,3 +60,18 @@ class Store:
             (agent, limit),
         ).fetchall()
         return list(reversed(rows))
+
+    def has_seen(self, agent: str, link: str) -> bool:
+        """Utilisé par les agents de veille (ex. /renault) pour ne signaler
+        qu'un article jamais rencontré lors d'une exécution précédente."""
+        row = self._conn.execute(
+            "SELECT 1 FROM seen_links WHERE agent = ? AND link = ?", (agent, link)
+        ).fetchone()
+        return row is not None
+
+    def mark_seen(self, agent: str, link: str) -> None:
+        with self._conn:
+            self._conn.execute(
+                "INSERT OR IGNORE INTO seen_links (agent, link) VALUES (?, ?)",
+                (agent, link),
+            )

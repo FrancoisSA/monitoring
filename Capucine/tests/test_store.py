@@ -31,3 +31,34 @@ def test_get_history_respects_limit_and_order(tmp_path):
 
     # Les 2 derniers messages, dans l'ordre chronologique (pas l'inverse)
     assert history == [("user", "message 3"), ("user", "message 4")]
+
+
+def test_has_seen_is_false_for_an_unknown_link(tmp_path):
+    store = Store(tmp_path / "test.db")
+
+    assert store.has_seen("renault", "https://example.com/article") is False
+
+
+def test_mark_seen_makes_has_seen_true(tmp_path):
+    store = Store(tmp_path / "test.db")
+
+    store.mark_seen("renault", "https://example.com/article")
+
+    assert store.has_seen("renault", "https://example.com/article") is True
+
+
+def test_seen_links_are_scoped_per_agent(tmp_path):
+    store = Store(tmp_path / "test.db")
+
+    store.mark_seen("renault", "https://example.com/article")
+
+    assert store.has_seen("autre-agent", "https://example.com/article") is False
+
+
+def test_mark_seen_twice_does_not_raise(tmp_path):
+    store = Store(tmp_path / "test.db")
+
+    store.mark_seen("renault", "https://example.com/article")
+    store.mark_seen("renault", "https://example.com/article")  # ne doit pas lever d'erreur
+
+    assert store.has_seen("renault", "https://example.com/article") is True

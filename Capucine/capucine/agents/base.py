@@ -14,9 +14,18 @@ from capucine.deps import Deps
 
 @dataclass(frozen=True)
 class AgentResponse:
-    """Ce qu'un agent renvoie : le texte à répondre sur Telegram."""
+    """Ce qu'un agent renvoie : le texte à répondre sur Telegram.
+
+    `notify` ne concerne que les déclenchements planifiés (cron → socket,
+    cf. service.py::run_scheduled_trigger) : à False, rien n'est envoyé
+    proactivement sur Telegram (ex. veille horaire sans rien de nouveau à
+    signaler). Un déclenchement manuel (commande Telegram tapée par
+    l'utilisateur) ignore ce champ et répond toujours — dispatch.py ne
+    transmet que `.text`.
+    """
 
     text: str
+    notify: bool = True
 
 
 class Agent(Protocol):
