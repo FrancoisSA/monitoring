@@ -52,6 +52,13 @@ class Config:
     renault_llm_timeout: int
     ia_feeds: "list[str]"
     ia_llm_timeout: int
+    mac_host: "str | None"
+    mac_ssh_user: str
+    mac_ssh_key_path: str
+    mac_address: str
+    mac_model: str
+    mac_wake_timeout_s: int
+    mac_retry_interval_s: int
 
 
 def _parse_comma_separated(raw: "str | None", default: "tuple[str, ...]") -> "list[str]":
@@ -75,6 +82,19 @@ def load_config() -> Config:
             "— copiez .env.example vers .env et renseignez-les."
         )
 
+    mac_host = os.getenv("MAC_HOST")
+    mac_ssh_user = os.getenv("MAC_SSH_USER", "")
+    mac_address = os.getenv("MAC_ADDRESS", "")
+    if mac_host and (not mac_ssh_user or not mac_address):
+        # Fail-fast : une MAC_ADDRESS vide fait planter send_wol_packet (ValueError)
+        # et un MAC_SSH_USER vide rend toute connexion SSH impossible — mieux
+        # vaut le signaler au démarrage qu'à la première tentative de réveil.
+        raise ValueError(
+            "[config] MAC_HOST est défini mais MAC_SSH_USER et/ou MAC_ADDRESS "
+            "sont manquants — renseignez les deux ou laissez MAC_HOST vide "
+            "pour désactiver l'intégration Mac/LM Studio."
+        )
+
     return Config(
         telegram_bot_token=token,
         telegram_chat_id=int(chat_id),
@@ -91,4 +111,13 @@ def load_config() -> Config:
         renault_llm_timeout=int(os.getenv("RENAULT_LLM_TIMEOUT", "420")),
         ia_feeds=_parse_comma_separated(os.getenv("IA_FEEDS"), _DEFAULT_IA_FEEDS),
         ia_llm_timeout=int(os.getenv("IA_LLM_TIMEOUT", "420")),
+        # MAC_HOST absent = intégration Mac/LM Studio désactivée (agents.*.py
+        # utilisent alors uniquement le backend Ollama local, comme avant).
+        mac_host=mac_host,
+        mac_ssh_user=mac_ssh_user,
+        mac_ssh_key_path=os.getenv("MAC_SSH_KEY_PATH", "/home/fsalazar/.ssh/capucine_mac_ed25519"),
+        mac_address=mac_address,
+        mac_model=os.getenv("MAC_MODEL", "qwen3-coder-30b-a3b-instruct-mlx"),
+        mac_wake_timeout_s=int(os.getenv("MAC_WAKE_TIMEOUT_S", "180")),
+        mac_retry_interval_s=int(os.getenv("MAC_RETRY_INTERVAL_S", "10")),
     )

@@ -7,6 +7,8 @@ dispatch.py pour la logique testée en profondeur).
 """
 from __future__ import annotations
 
+from pathlib import Path
+
 import requests
 
 _API_BASE = "https://api.telegram.org/bot{token}"
@@ -34,4 +36,16 @@ class TelegramClient:
             json={"chat_id": chat_id, "text": text},
             timeout=10,
         )
+        response.raise_for_status()
+
+    def send_voice(self, chat_id: int, voice_path: "str | Path") -> None:
+        """Envoie un message vocal natif (bulle avec forme d'onde) — le
+        fichier doit être en OGG/Opus, format attendu par l'API Telegram."""
+        with open(voice_path, "rb") as voice_file:
+            response = requests.post(
+                f"{self._base}/sendVoice",
+                data={"chat_id": chat_id},
+                files={"voice": voice_file},
+                timeout=30,
+            )
         response.raise_for_status()

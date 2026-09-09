@@ -15,6 +15,7 @@ from pathlib import Path
 
 import requests
 
+from capucine.agents.base import AgentResponse
 from capucine.agents.echo import EchoAgent
 from capucine.agents.ia import IaAgent
 from capucine.agents.presse import PresseAgent
@@ -24,6 +25,7 @@ from capucine.config import Config, load_config
 from capucine.deps import Deps
 from capucine.dispatch import extract_message, handle_message
 from capucine.llm.ollama_client import OllamaClient
+from capucine.mac_wake import MacConfig
 from capucine.router import Router
 from capucine.store import Store
 from capucine.telegram_client import TelegramClient
@@ -32,6 +34,23 @@ logging.basicConfig(
     level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
 )
 logger = logging.getLogger(__name__)
+
+
+def build_mac_config(config: Config) -> "MacConfig | None":
+    """None si MAC_HOST n'est pas configuré — l'intégration Mac/LM Studio est
+    alors désactivée et les agents utilisent uniquement Ollama (comportement
+    d'origine, cf. capucine/digest.py::generate_digest)."""
+    if not config.mac_host:
+        return None
+    return MacConfig(
+        host=config.mac_host,
+        ssh_user=config.mac_ssh_user,
+        ssh_key_path=config.mac_ssh_key_path,
+        mac_address=config.mac_address,
+        model=config.mac_model,
+        wake_timeout_s=config.mac_wake_timeout_s,
+        retry_interval_s=config.mac_retry_interval_s,
+    )
 
 
 def build_router(config: Config) -> Router:
@@ -48,15 +67,20 @@ def build_router(config: Config) -> Router:
     ia_llm_client = OllamaClient(
         model=config.ollama_model, host=config.ollama_host, timeout=config.ia_llm_timeout
     )
+    mac_config = build_mac_config(config)
     return Router(
         {
             "echo": EchoAgent(),
             "synthese": SyntheseAgent(),
-            "presse": PresseAgent(feed_urls=config.presse_feeds, llm_client=presse_llm_client),
-            "renault": RenaultAgent(
-                search_queries=config.renault_search_queries, llm_client=renault_llm_client
+            "presse": PresseAgent(
+                feed_urls=config.presse_feeds, llm_client=presse_llm_client, mac_config=mac_config
             ),
-            "ia": IaAgent(feed_urls=config.ia_feeds, llm_client=ia_llm_client),
+            "renault": RenaultAgent(
+                search_queries=config.renault_search_queries,
+                llm_client=renault_llm_client,
+                mac_config=mac_config,
+            ),
+            "ia": IaAgent(feed_urls=config.ia_feeds, llm_client=ia_llm_client, mac_config=mac_config),
         }
     )
 
@@ -68,6 +92,22 @@ def build_deps(config: Config) -> Deps:
         ),
         store=Store(config.db_path),
     )
+
+
+def send_response(telegram: TelegramClient, chat_id: int, response: AgentResponse, context: str) -> None:
+    """Envoie le texte puis, s'il existe, le vocal — un échec sur l'un
+    n'empêche pas de tenter l'autre, et jamais ne fait planter l'appelant
+    (cf. décision produit : un vocal manqué ne prive pas du texte)."""
+    try:
+        telegram.send_message(chat_id, response.text)
+    except requests.exceptions.RequestException:
+        logger.exception("[%s] Échec d'envoi du texte Telegram", context)
+
+    if response.voice_path is not None:
+        try:
+            telegram.send_voice(chat_id, response.voice_path)
+        except Exception:  # noqa: BLE001 — send_voice ouvre un fichier (OSError possible) en plus de l'appel réseau (RequestException) ; un vocal manqué ne doit jamais faire planter le service
+            logger.exception("[%s] Échec d'envoi du vocal Telegram", context)
 
 
 def run_scheduled_trigger(
@@ -96,10 +136,7 @@ def run_scheduled_trigger(
         # manuel de la commande qui, lui, répond toujours (cf. dispatch.py).
         return
 
-    try:
-        telegram.send_message(chat_id, response.text)
-    except requests.exceptions.RequestException:
-        logger.exception("[trigger] Échec d'envoi Telegram pour /%s", command)
+    send_response(telegram, chat_id, response, context="trigger")
 
 
 def serve_trigger_socket(socket_path: str, trigger_queue: "queue.Queue[str]") -> None:
@@ -165,10 +202,7 @@ def run() -> None:
                 continue
             reply = handle_message(message, router, deps, config.telegram_chat_id)
             if reply is not None:
-                try:
-                    telegram.send_message(message.chat_id, reply)
-                except requests.exceptions.RequestException:
-                    logger.exception("[service] Échec d'envoi de la réponse Telegram")
+                send_response(telegram, message.chat_id, reply, context="service")
 
         # Déclenchements planifiés (cron → socket) : traités ici, jamais
         # depuis le thread du socket, pour rester sur l'unique connexion

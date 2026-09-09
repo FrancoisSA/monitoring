@@ -1,8 +1,11 @@
 from datetime import datetime, timezone
+from pathlib import Path
 
 from capucine.agents.presse import PresseAgent
+from capucine.digest import DigestResult
 from capucine.feeds import FeedEntry
 from capucine.llm.base import LLMResponse
+from capucine.mac_wake import MacConfig
 
 
 class _FakeDedicatedLLMClient:
@@ -70,3 +73,31 @@ def test_presse_uses_its_own_llm_client_when_provided(deps, fake_llm):
 
     assert "réponse du client dédié" in response.text
     assert fake_llm.calls == []  # le client de deps n'est pas sollicité
+
+
+def test_presse_passes_mac_config_and_voice_output_path_to_generate_digest(deps, fake_llm, monkeypatch):
+    mac_config = MacConfig(
+        host="10.0.0.8", ssh_user="u", ssh_key_path="/k", mac_address="84:2f:57:d3:48:6c", model="m"
+    )
+    captured = {}
+
+    def fake_generate_digest(prompt, fallback_llm_client, mac_config=None, voice_output_path=None, **kwargs):
+        captured["mac_config"] = mac_config
+        captured["voice_output_path"] = voice_output_path
+        return DigestResult(
+            response=LLMResponse(text="- [Source] ok", model="fake", latency_ms=0.0),
+            voice_path=Path("/tmp/capucine-voice-presse.ogg"),
+        )
+
+    monkeypatch.setattr("capucine.agents.presse.generate_digest", fake_generate_digest)
+    agent = PresseAgent(
+        feed_urls=["https://feed.example"],
+        fetch_entries=lambda urls: [_entry("Titre")],
+        mac_config=mac_config,
+    )
+
+    response = agent.handle("", deps)
+
+    assert captured["mac_config"] is mac_config
+    assert captured["voice_output_path"] == Path("/tmp/capucine-voice-presse.ogg")
+    assert response.voice_path == Path("/tmp/capucine-voice-presse.ogg")

@@ -70,7 +70,7 @@ def test_handle_message_routes_known_command_to_its_agent(deps):
 
     reply = handle_message(message, router, deps, allowed_chat_id=42)
 
-    assert reply == "bonjour"
+    assert reply.text == "bonjour"
 
 
 def test_handle_message_on_unknown_command_returns_explicit_error(deps):
@@ -79,7 +79,7 @@ def test_handle_message_on_unknown_command_returns_explicit_error(deps):
 
     reply = handle_message(message, router, deps, allowed_chat_id=42)
 
-    assert reply == "Commande inconnue : /inconnu"
+    assert reply.text == "Commande inconnue : /inconnu"
 
 
 def test_handle_message_on_plain_text_without_slash_is_ignored(deps):
@@ -97,4 +97,4 @@ def test_handle_message_on_agent_error_returns_friendly_message(deps):
 
     reply = handle_message(message, router, deps, allowed_chat_id=42)
 
-    assert reply == "Désolé, /echo a rencontré une erreur."
+    assert reply.text == "Désolé, /echo a rencontré une erreur."

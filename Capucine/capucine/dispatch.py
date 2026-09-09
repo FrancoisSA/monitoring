@@ -11,6 +11,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
+from capucine.agents.base import AgentResponse
 from capucine.deps import Deps
 from capucine.router import Router
 
@@ -54,9 +55,10 @@ def handle_message(
     router: Router,
     deps: Deps,
     allowed_chat_id: int,
-) -> "str | None":
-    """Retourne le texte à répondre, ou None si le message doit être ignoré
-    (expéditeur non autorisé, ou texte sans commande)."""
+) -> "AgentResponse | None":
+    """Retourne la réponse à envoyer (texte + vocal éventuel), ou None si le
+    message doit être ignoré (expéditeur non autorisé, ou texte sans
+    commande)."""
     if message.chat_id != allowed_chat_id:
         # Whitelist stricte : accès strictement personnel (cf. spec).
         logger.warning("[dispatch] Message ignoré, chat_id non autorisé: %s", message.chat_id)
@@ -68,10 +70,10 @@ def handle_message(
 
     agent = router.route(command)
     if agent is None:
-        return f"Commande inconnue : /{command}"
+        return AgentResponse(text=f"Commande inconnue : /{command}")
 
     try:
-        return agent.handle(args, deps).text
+        return agent.handle(args, deps)
     except Exception:  # noqa: BLE001 — on répond toujours à l'utilisateur, jamais de catch silencieux
         logger.exception("[dispatch] Échec de l'agent /%s", command)
-        return f"Désolé, /{command} a rencontré une erreur."
+        return AgentResponse(text=f"Désolé, /{command} a rencontré une erreur.")

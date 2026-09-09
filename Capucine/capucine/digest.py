@@ -10,10 +10,18 @@ prompt aussi court et simple que possible.
 """
 from __future__ import annotations
 
+import logging
 import re
+from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 
 from capucine.feeds import FeedEntry
+from capucine.llm.base import LLMClient, LLMResponse
+from capucine.mac_generate import generate_text_on_mac, generate_voice_on_mac
+from capucine.mac_wake import MacConfig, wait_for_mac
+
+logger = logging.getLogger(__name__)
 
 _MONTHS_FR = (
     "janvier", "février", "mars", "avril", "mai", "juin",
@@ -77,3 +85,66 @@ def format_for_telegram(raw_text: str, title: str, now: "datetime | None" = None
 
     body = "\n\n".join(blocks) if blocks else raw_text.strip()
     return f"{header}\n\n{body}\n\n{_SEPARATOR}"
+
+
+def text_for_speech(raw_text: str) -> str:
+    """Convertit les lignes "- [Source] phrase" en texte naturel pour la
+    synthèse vocale (say) : plus de crochets ni de tirets, des phrases
+    complètes enchaînées — cf. décision produit : pas de réécriture par LLM
+    dédiée, juste un nettoyage du texte déjà rédigé."""
+    sentences = []
+    for line in raw_text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        match = _BULLET_LINE_RE.match(line)
+        if match:
+            sentences.append(f"{match['source'].strip()}. {match['text'].strip()}")
+        else:
+            sentences.append(line)
+    return " ".join(sentences)
+
+
+@dataclass(frozen=True)
+class DigestResult:
+    response: LLMResponse
+    voice_path: "Path | None"
+
+
+def generate_digest(
+    prompt: str,
+    fallback_llm_client: LLMClient,
+    mac_config: "MacConfig | None" = None,
+    voice_output_path: "str | Path | None" = None,
+    wait_for_mac_fn=wait_for_mac,
+    generate_text_fn=generate_text_on_mac,
+    generate_voice_fn=generate_voice_on_mac,
+) -> DigestResult:
+    """Mécanisme générique de génération d'un digest, réutilisable par tout
+    agent (/presse, /renault, /ia, et tout futur agent) : tente Mac + LM
+    Studio d'abord (avec vocal si `voice_output_path` est fourni), puis
+    bascule sur le backend local (Ollama, `fallback_llm_client`) — texte
+    seul, sans vocal — si le Mac est injoignable ou si la génération échoue.
+    """
+    mac_available = False
+    if mac_config is not None:
+        try:
+            mac_available = wait_for_mac_fn(mac_config)
+        except Exception:  # noqa: BLE001 — ex. MAC_ADDRESS mal configurée (mac_wake.send_wol_packet
+            # lève ValueError) : ne doit jamais empêcher le repli Ollama, seulement le signaler.
+            logger.exception("[digest] Échec de la détection de disponibilité du Mac, repli sur le backend local")
+
+    if mac_available:
+        try:
+            response = generate_text_fn(mac_config, prompt)
+        except Exception:  # noqa: BLE001 — un échec côté Mac ne doit jamais empêcher le repli Ollama
+            logger.exception("[digest] Échec génération sur le Mac, repli sur le backend local")
+        else:
+            voice_path = None
+            if voice_output_path is not None:
+                voice_path = generate_voice_fn(
+                    mac_config, text_for_speech(response.text), voice_output_path
+                )
+            return DigestResult(response=response, voice_path=voice_path)
+
+    return DigestResult(response=fallback_llm_client.generate(prompt), voice_path=None)
