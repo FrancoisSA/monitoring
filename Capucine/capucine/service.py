@@ -15,6 +15,8 @@ from pathlib import Path
 
 import requests
 
+from capucine.agents.agenda import AgendaAgent
+from capucine.agents.agenda_check import AgendaCheckAgent
 from capucine.agents.base import AgentResponse
 from capucine.agents.echo import EchoAgent
 from capucine.agents.ia import IaAgent
@@ -24,6 +26,8 @@ from capucine.agents.synthese import SyntheseAgent
 from capucine.config import Config, load_config
 from capucine.deps import Deps
 from capucine.dispatch import extract_message, handle_message
+from capucine.google_calendar import GoogleCalendarClient
+from capucine.google_gmail import GmailClient
 from capucine.llm.ollama_client import OllamaClient
 from capucine.mac_wake import MacConfig
 from capucine.router import Router
@@ -68,6 +72,24 @@ def build_router(config: Config) -> Router:
         model=config.ollama_model, host=config.ollama_host, timeout=config.ia_llm_timeout
     )
     mac_config = build_mac_config(config)
+
+    # /agenda et /agenda_check partagent le même client Google Calendar
+    # (cache de calendarId compris) — un seul construit ici.
+    calendar = GoogleCalendarClient(
+        credentials_file=config.google_credentials_file,
+        token_file=config.google_token_file,
+        timezone=config.calendar_timezone,
+    )
+    gmail = GmailClient(
+        credentials_file=config.google_credentials_file,
+        token_file=config.google_token_file,
+    )
+    # Client Ollama dédié au tool-calling de /agenda (modèle/timeout
+    # potentiellement différents des autres agents, cf. capucine/config.py).
+    agenda_llm_client = OllamaClient(
+        model=config.agenda_ollama_model, host=config.ollama_host, timeout=config.agenda_llm_timeout
+    )
+
     return Router(
         {
             "echo": EchoAgent(),
@@ -81,6 +103,13 @@ def build_router(config: Config) -> Router:
                 mac_config=mac_config,
             ),
             "ia": IaAgent(feed_urls=config.ia_feeds, llm_client=ia_llm_client, mac_config=mac_config),
+            "agenda": AgendaAgent(calendar=calendar, llm_client=agenda_llm_client),
+            "agenda_check": AgendaCheckAgent(
+                calendar=calendar,
+                gmail=gmail,
+                reminder_advance_minutes=config.calendar_reminder_advance_minutes,
+                agenda_pro_calendar_name=config.calendar_agenda_pro_name,
+            ),
         }
     )
 

@@ -11,7 +11,7 @@ from typing import Callable, Optional
 
 import requests
 
-from capucine.llm.base import LLMResponse
+from capucine.llm.base import LLMResponse, Message, ToolCall, ToolCallResponse
 
 PostFn = Callable[[str, dict], dict]
 
@@ -54,3 +54,31 @@ class OllamaClient:
             raise RuntimeError(f"[ollama] Réponse vide du modèle {self.model}")
 
         return LLMResponse(text=text, model=self.model, latency_ms=latency_ms)
+
+    def chat(self, messages: "list[Message]", tools: "list[dict]") -> ToolCallResponse:
+        """Implémente ToolCallingLLMClient (cf. capucine/llm/base.py) via
+        l'API /api/chat d'Ollama, qui supporte le tool-calling pour les
+        modèles récents (ex. familles qwen2.5/llama3.1) — contrairement à
+        /api/generate utilisé par generate() ci-dessus."""
+        payload = {
+            "model": self.model,
+            "messages": [
+                {"role": m.role, "content": m.content} for m in messages
+            ],
+            "tools": tools,
+            "stream": False,
+        }
+        data = self.post(f"{self.host}/api/chat", payload)
+        message = data.get("message", {})
+
+        raw_tool_calls = message.get("tool_calls") or []
+        tool_calls = [
+            ToolCall(
+                id=f"tool_{i}",
+                name=tc.get("function", {}).get("name", ""),
+                arguments=tc.get("function", {}).get("arguments") or {},
+            )
+            for i, tc in enumerate(raw_tool_calls)
+        ]
+
+        return ToolCallResponse(text=message.get("content") or None, tool_calls=tool_calls)

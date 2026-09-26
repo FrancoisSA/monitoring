@@ -59,6 +59,17 @@ class Config:
     mac_model: str
     mac_wake_timeout_s: int
     mac_retry_interval_s: int
+    google_credentials_file: str
+    google_token_file: str
+    calendar_timezone: str
+    calendar_agenda_pro_name: str
+    extra_calendar_names: "list[str]"
+    calendar_reminder_advance_minutes: int
+    agenda_ollama_model: str
+    agenda_llm_timeout: int
+    dashboard_port: int
+    oauth_redirect_uri: str
+    dashboard_cache_ttl_seconds: int
 
 
 def _parse_comma_separated(raw: "str | None", default: "tuple[str, ...]") -> "list[str]":
@@ -95,11 +106,13 @@ def load_config() -> Config:
             "pour désactiver l'intégration Mac/LM Studio."
         )
 
+    ollama_model = os.getenv("OLLAMA_MODEL", "qwen2.5:3b")
+
     return Config(
         telegram_bot_token=token,
         telegram_chat_id=int(chat_id),
         ollama_host=os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434"),
-        ollama_model=os.getenv("OLLAMA_MODEL", "qwen2.5:3b"),
+        ollama_model=ollama_model,
         ollama_timeout=int(os.getenv("OLLAMA_TIMEOUT", "60")),
         db_path=os.getenv("CAPUCINE_DB_PATH", "capucine.db"),
         presse_feeds=_parse_comma_separated(os.getenv("PRESSE_FEEDS"), _DEFAULT_PRESSE_FEEDS),
@@ -120,4 +133,25 @@ def load_config() -> Config:
         mac_model=os.getenv("MAC_MODEL", "qwen3-coder-30b-a3b-instruct-mlx"),
         mac_wake_timeout_s=int(os.getenv("MAC_WAKE_TIMEOUT_S", "180")),
         mac_retry_interval_s=int(os.getenv("MAC_RETRY_INTERVAL_S", "10")),
+        google_credentials_file=os.getenv("GOOGLE_CREDENTIALS_FILE", "credentials.json"),
+        google_token_file=os.getenv("GOOGLE_TOKEN_FILE", "token.json"),
+        calendar_timezone=os.getenv("CALENDAR_TIMEZONE", "Europe/Paris"),
+        calendar_agenda_pro_name=os.getenv("CALENDAR_AGENDA_PRO_NAME", "Ampere"),
+        # Calendriers additionnels (autres comptes Google partagés en lecture
+        # avec le compte authentifié) à inclure dans /api/events. Vide = seul
+        # le calendrier "primary" est interrogé.
+        extra_calendar_names=_parse_comma_separated(os.getenv("EXTRA_CALENDAR_NAMES"), ()),
+        calendar_reminder_advance_minutes=int(os.getenv("CALENDAR_REMINDER_ADVANCE_MINUTES", "20")),
+        # Modèle Ollama dédié au tool-calling de /agenda — même modèle que
+        # OLLAMA_MODEL par défaut, surchageable si le tool-calling se révèle
+        # peu fiable sur un petit modèle (cf. capucine/llm/ollama_client.py).
+        agenda_ollama_model=os.getenv("AGENDA_OLLAMA_MODEL") or ollama_model,
+        agenda_llm_timeout=int(os.getenv("AGENDA_LLM_TIMEOUT", "60")),
+        # 9090 = Pi Monitor, 9191 = Jeffrey : 9192 par défaut pour Capucine sur le même Pi.
+        dashboard_port=int(os.getenv("DASHBOARD_PORT", "9192")),
+        oauth_redirect_uri=os.getenv("OAUTH_REDIRECT_URI", "http://localhost:9192/auth/callback"),
+        # Durée de vie du cache des appels Google Calendar/Tasks (cf.
+        # capucine/cache.py). Inférieur au rafraîchissement client (60s) pour
+        # rester réactif après une action utilisateur (tâche complétée...).
+        dashboard_cache_ttl_seconds=int(os.getenv("DASHBOARD_CACHE_TTL_SECONDS", "30")),
     )

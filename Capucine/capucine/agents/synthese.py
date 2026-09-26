@@ -4,11 +4,10 @@ from __future__ import annotations
 
 from capucine.agents.base import AgentResponse
 from capucine.deps import Deps
+from capucine.prompts import load_prompt
 
-_PROMPT_TEMPLATE = (
-    "Résume le texte suivant en français, en 3 phrases maximum, "
-    "sans ajouter d'information absente du texte :\n\n{texte}"
-)
+# Modifiable sans toucher au code : cf. capucine/prompts/synthese.md.
+_PROMPT_TEMPLATE = load_prompt("synthese")
 
 
 class SyntheseAgent:

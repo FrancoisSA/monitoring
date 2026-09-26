@@ -5,3 +5,14 @@
 requests>=2.31.0
 python-dotenv>=1.0.0
 feedparser>=6.0.0
+
+# /agenda — intégration Google Calendar/Gmail (tool-calling via Ollama, déjà
+# une dépendance existante, cf. requests ci-dessus)
+google-api-python-client==2.111.0
+google-auth-httplib2==0.2.0
+google-auth-oauthlib==1.2.0
+pytz==2024.1
+beautifulsoup4==4.12.2
+
+# Dashboard web (tâches, agenda, weekends) — capucine/dashboard.py
+flask>=3.0.0

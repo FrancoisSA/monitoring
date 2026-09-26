@@ -1,0 +1,21 @@
+[Unit]
+Description=Capucine — dashboard web (tâches, agenda, weekends)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=fsalazar
+Group=fsalazar
+WorkingDirectory=/home/fsalazar/04-capucine
+
+# Config lue depuis .env (GOOGLE_CREDENTIALS_FILE, DASHBOARD_PORT, OAUTH_REDIRECT_URI, ...)
+EnvironmentFile=/home/fsalazar/04-capucine/.env
+
+ExecStart=/home/fsalazar/04-capucine/venv/bin/python -m capucine.dashboard
+
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

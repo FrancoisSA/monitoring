@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Capucine — {% block title %}Dashboard{% endblock %}</title>
+
+    <!-- PWA : installable sur iOS via Safari et sur Mac -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Capucine">
+    <meta name="theme-color" content="#1e1b4b">
+
+    <!-- Tailwind CSS (CDN) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Police Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+
+        .bg-primary   { background-color: #1e1b4b; }
+        .text-primary { color: #818cf8; }
+        .border-primary { border-color: #4338ca; }
+
+        .badge-overdue  { background-color: #450a0a; color: #fca5a5; }
+        .badge-today    { background-color: #431407; color: #fed7aa; }
+        .badge-upcoming { background-color: #052e16; color: #86efac; }
+
+        .spinner {
+            border: 3px solid #374151;
+            border-top-color: #818cf8;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 0.8s linear infinite;
+            display: inline-block;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .scroll-col { overflow-y: auto; max-height: 70vh; }
+        .scroll-col::-webkit-scrollbar { width: 4px; }
+        .scroll-col::-webkit-scrollbar-thumb { background: #4338ca; border-radius: 2px; }
+
+        /* ============================================================
+           PALETTE DARK MODE — modifiez les valeurs hex ici
+           ============================================================ */
+
+        body         { background-color: #0f172a; color: #e2e8f0; }
+        .bg-gray-50  { background-color: #0f172a !important; }
+
+        .bg-white    { background-color: #1e293b !important; }
+        .card        { background-color: #1e293b; border: 1px solid #334155; }
+
+        .border-b        { border-color: #334155 !important; }
+        .border-t        { border-color: #1e293b !important; }
+        .border-gray-200 { border-color: #334155 !important; }
+
+        .text-gray-800 { color: #e2e8f0 !important; }
+        .text-gray-600 { color: #94a3b8 !important; }
+        .text-gray-500 { color: #64748b !important; }
+        .text-gray-400 { color: #475569 !important; }
+        .text-gray-300 { color: #334155 !important; }
+
+        .text-indigo-600 { color: #818cf8 !important; }
+        .text-indigo-500 { color: #818cf8 !important; }
+        .text-indigo-700 { color: #a5b4fc !important; }
+
+        .shadow { box-shadow: 0 1px 3px rgba(0,0,0,0.5) !important; }
+
+        .hover\:text-emerald-500:hover { color: #34d399 !important; }
+
+        .placeholder-gray-300::placeholder { color: #334155 !important; }
+        .placeholder-gray-500::placeholder { color: #64748b !important; }
+
+        .bg-blue-50 { background-color: #1e3a5f !important; }
+        .hover\:border-blue-200:hover { border-color: #3b82f6 !important; }
+
+        .badge-overdue  { background-color: #450a0a; color: #fca5a5; }
+        .badge-today    { background-color: #431407; color: #fed7aa; }
+        .badge-upcoming { background-color: #052e16; color: #86efac; }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen flex flex-col">
+
+    <!-- ── Header ────────────────────────────────────────────────────────── -->
+    <header class="bg-primary text-white shadow-md">
+        <div class="container mx-auto px-4 py-4 flex justify-between items-center">
+            <div class="flex items-center space-x-3">
+                <span class="text-2xl">🐒</span>
+                <div>
+                    <h1 class="text-xl font-bold leading-tight">Capucine</h1>
+                    <p class="text-indigo-300 text-xs">Assistant Telegram &nbsp;·&nbsp; déployé le {{ deployed_at }}</p>
+                </div>
+                <nav class="flex items-center space-x-1 ml-4">
+                    <a href="{{ url_for('index') }}"
+                       class="text-xs font-medium px-3 py-1.5 rounded-lg transition no-underline
+                              {{ 'bg-indigo-700 text-white' if request.path == '/' else 'text-indigo-300 hover:text-white' }}">
+                        Dashboard
+                    </a>
+                    <a href="{{ url_for('weekends_page') }}"
+                       class="text-xs font-medium px-3 py-1.5 rounded-lg transition no-underline
+                              {{ 'bg-indigo-700 text-white' if request.path == '/weekends' else 'text-indigo-300 hover:text-white' }}">
+                        🗓️ Weekends
+                    </a>
+                </nav>
+            </div>
+            <div class="flex items-center space-x-3 text-sm text-indigo-300">
+                <span id="last-updated">—</span>
+                <a id="google-login-btn" href="{{ url_for('login_page', reason='expired') }}"
+                   style="display:none; background:#ea580c; color:white;"
+                   class="font-semibold px-3 py-1.5 rounded-lg hover:opacity-90 transition text-xs shadow no-underline">
+                    🔑 Google
+                </a>
+                <button onclick="refreshAll()"
+                        class="bg-indigo-700 text-indigo-100 font-semibold px-3 py-1.5 rounded-lg
+                               hover:bg-indigo-600 transition text-xs shadow">
+                    ↺ Rafraîchir
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- ── Contenu principal ─────────────────────────────────────────────── -->
+    <main class="flex-1 py-6">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- ── Footer ────────────────────────────────────────────────────────── -->
+    <footer style="background-color:#1e293b; border-top: 1px solid #334155;" class="py-3">
+        <div class="container mx-auto px-4 text-center text-xs text-gray-400">
+            Capucine — Dashboard personnel · Raspberry Pi
+        </div>
+    </footer>
+
+<!-- Bannière de reconnexion Google — affichée si une requête API retourne 401 -->
+<div id="auth-banner" style="display:none; position:fixed; bottom:0; left:0; right:0; z-index:999;
+     background:#7c2d12; color:#fed7aa; padding:12px 24px;
+     align-items:center; justify-content:space-between;">
+    <span>⚠️ Connexion Google expirée — le dashboard ne peut plus accéder à vos données.</span>
+    <a href="{{ url_for('login_page', reason='expired') }}"
+       style="background:#ea580c; color:white; padding:6px 16px; border-radius:6px;
+              font-weight:600; text-decoration:none; font-size:0.875rem;">
+        Reconnecter Google
+    </a>
+</div>
+
+<script>
+// Intercepte tous les fetch pour détecter une expiration OAuth (401 auth_required)
+const _origFetch = window.fetch;
+window.fetch = async (...args) => {
+    const res = await _origFetch(...args);
+    if (res.status === 401) {
+        res.clone().json().then(data => {
+            if (data.error === 'auth_required') {
+                document.getElementById('auth-banner').style.display = 'flex';
+                document.getElementById('google-login-btn').style.display = 'inline-flex';
+            }
+        }).catch(() => {});
+    }
+    return res;
+};
+
+// Vérifie le statut Google au chargement pour afficher/masquer le bouton
+fetch('/auth/status').then(r => r.json()).then(d => {
+    if (!d.connected) {
+        document.getElementById('google-login-btn').style.display = 'inline-flex';
+    }
+}).catch(() => {});
+</script>
+
+</body>
+</html>

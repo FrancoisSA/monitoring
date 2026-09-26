@@ -1,0 +1,459 @@
+{% extends "base.html" %}
+{% block title %}Tableau de bord{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4">
+
+    <!-- ── Cards de métriques ───────────────────────────────────────────── -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div class="bg-white rounded-xl shadow p-4 text-center">
+            <div class="text-3xl font-bold" style="color:#fca5a5" id="stat-overdue">—</div>
+            <div class="text-xs text-gray-500 mt-1">🔴 En retard</div>
+        </div>
+        <div class="bg-white rounded-xl shadow p-4 text-center">
+            <div class="text-3xl font-bold" style="color:#fed7aa" id="stat-today-tasks">—</div>
+            <div class="text-xs text-gray-500 mt-1">🟡 Tâches du jour</div>
+        </div>
+        <div class="bg-white rounded-xl shadow p-4 text-center">
+            <div class="text-3xl font-bold" style="color:#86efac" id="stat-upcoming">—</div>
+            <div class="text-xs text-gray-500 mt-1">🟢 À venir</div>
+        </div>
+        <div class="bg-white rounded-xl shadow p-4 text-center">
+            <div class="text-3xl font-bold" style="color:#a5b4fc" id="stat-today-events">—</div>
+            <div class="text-xs text-gray-500 mt-1">📅 RDV aujourd'hui</div>
+        </div>
+    </div>
+
+    <!-- ── Trois colonnes : Tâches | Agenda | Weekends ──────────────────── -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+        <!-- ── Colonne Tâches ──────────────────────────────────────────── -->
+        <div class="bg-white rounded-xl shadow">
+            <div class="px-4 pt-4 pb-3 border-b flex items-center justify-between">
+                <h2 class="font-semibold text-gray-800">📋 Tâches</h2>
+                <span id="tasks-spinner" class="spinner"></span>
+            </div>
+            <div class="scroll-col px-4 py-3" id="tasks-list">
+                <div class="text-center text-gray-400 py-8">Chargement...</div>
+            </div>
+        </div>
+
+        <!-- ── Colonne Agenda ──────────────────────────────────────────── -->
+        <div class="bg-white rounded-xl shadow">
+            <div class="px-4 pt-4 pb-3 border-b flex items-center justify-between">
+                <h2 class="font-semibold text-gray-800">📅 Agenda <span class="text-xs font-normal text-gray-400">(30 jours)</span></h2>
+                <span id="events-spinner" class="spinner"></span>
+            </div>
+            <div class="scroll-col px-4 py-3" id="events-list">
+                <div class="text-center text-gray-400 py-8">Chargement...</div>
+            </div>
+        </div>
+
+        <!-- ── Colonne Weekends ────────────────────────────────────────── -->
+        <div class="bg-white rounded-xl shadow">
+            <div class="px-4 pt-4 pb-3 border-b flex items-center justify-between">
+                <h2 class="font-semibold text-gray-800">🗓️ Weekends <span class="text-xs font-normal text-gray-400">(12 mois)</span></h2>
+            </div>
+            <div class="scroll-col px-4 py-3" id="weekends-list">
+                <div class="text-center text-gray-400 py-8">Chargement...</div>
+            </div>
+        </div>
+
+    </div>
+
+</div>
+
+<!-- ── JavaScript ──────────────────────────────────────────────────────── -->
+<script>
+
+// ════════════════════════════════════════════════════════════════
+// UTILITAIRES
+// ════════════════════════════════════════════════════════════════
+
+function showSpinner(id)  { document.getElementById(id).style.display = 'inline-block'; }
+function hideSpinner(id)  { document.getElementById(id).style.display = 'none'; }
+
+// Échappe les caractères HTML pour éviter les injections XSS
+function escHtml(str) {
+    if (!str) return '';
+    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+
+// ════════════════════════════════════════════════════════════════
+// CARDS DE STATS (haut de page) — Source : GET /api/stats
+// ════════════════════════════════════════════════════════════════
+
+async function loadStats() {
+    try {
+        const res = await fetch('/api/stats');
+        const d   = await res.json();
+        document.getElementById('stat-overdue').textContent      = d.tasks.overdue  ?? '—';
+        document.getElementById('stat-today-tasks').textContent  = d.tasks.today    ?? '—';
+        document.getElementById('stat-upcoming').textContent     = d.tasks.upcoming ?? '—';
+        document.getElementById('stat-today-events').textContent = d.events.today   ?? '—';
+        document.getElementById('last-updated').textContent      = 'Mis à jour ' + d.updated_at;
+    } catch (e) {
+        console.error('Erreur stats', e);
+    }
+}
+
+
+// ════════════════════════════════════════════════════════════════
+// COLONNE TÂCHES — Source : GET /api/tasks
+// ════════════════════════════════════════════════════════════════
+
+async function loadTasks() {
+    showSpinner('tasks-spinner');
+    try {
+        const res  = await fetch('/api/tasks');
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        renderTasks(data);
+    } catch (e) {
+        document.getElementById('tasks-list').innerHTML =
+            `<p class="text-red-500 text-sm py-4">Erreur : ${escHtml(e.message)}</p>`;
+    } finally {
+        hideSpinner('tasks-spinner');
+    }
+}
+
+function renderTasks(tasks) {
+    const container = document.getElementById('tasks-list');
+
+    if (!tasks.length) {
+        container.innerHTML = '<p class="text-gray-400 text-sm py-6 text-center">✅ Aucune tâche en cours !</p>';
+        return;
+    }
+
+    const groups = [
+        { key: 'overdue',  label: '🔴 En retard',   badgeClass: 'badge-overdue'  },
+        { key: 'today',    label: '🟡 Aujourd\'hui', badgeClass: 'badge-today'    },
+        { key: 'upcoming', label: '🟢 À venir',      badgeClass: 'badge-upcoming' },
+    ];
+
+    let html = '';
+    groups.forEach(({ key, label, badgeClass }) => {
+        const filtered = tasks.filter(t => t.status_label === key);
+        if (!filtered.length) return;
+
+        html += `<p class="text-xs font-semibold uppercase tracking-wide text-indigo-600 mt-3 mb-1">${label}</p>`;
+
+        html += filtered.map(task => {
+            let dueDateValue = '';
+            if (task.due) {
+                try { dueDateValue = task.due.replace('Z','').slice(0,10); } catch(e) {}
+            }
+            return `
+            <div class="py-2.5 border-b last:border-0" id="task-${task.id}">
+
+                <div class="flex items-start gap-2" id="task-view-${task.id}">
+                    <span class="text-xs font-medium px-2 py-0.5 rounded-full mt-0.5 ${badgeClass} whitespace-nowrap shrink-0">
+                        ${task.due_display || 'Sans date'}
+                    </span>
+                    <span class="text-sm text-gray-800 flex-1">${escHtml(task.title)}</span>
+                    <button onclick="openEditTask('${task.id}')"
+                            title="Modifier"
+                            class="shrink-0 text-gray-300 hover:text-blue-400 transition text-sm leading-none mt-0.5">
+                        ✎
+                    </button>
+                    <button onclick="completeTask('${task.id}', this)"
+                            title="Marquer comme fait"
+                            class="shrink-0 text-gray-300 hover:text-emerald-500 transition text-base leading-none mt-0.5">
+                        ✓
+                    </button>
+                </div>
+
+                ${task.notes ? `<p class="text-xs text-gray-500 mt-1 ml-2" id="task-notes-${task.id}">${escHtml(task.notes)}</p>` : ''}
+
+                <div class="hidden mt-2 flex flex-col gap-1.5" id="task-edit-${task.id}">
+                    <input type="text"
+                           id="task-edit-title-${task.id}"
+                           value="${escHtml(task.title)}"
+                           class="w-full text-sm bg-gray-700 text-gray-100 border border-gray-500 rounded px-2 py-1 focus:outline-none focus:border-blue-400 placeholder-gray-400" />
+                    <input type="date"
+                           id="task-edit-due-${task.id}"
+                           value="${dueDateValue}"
+                           class="text-sm bg-gray-700 text-gray-100 border border-gray-500 rounded px-2 py-1 focus:outline-none focus:border-blue-400" />
+                    <div class="flex gap-2">
+                        <button onclick="saveTask('${task.id}')"
+                                class="text-xs bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded transition">
+                            Enregistrer
+                        </button>
+                        <button onclick="closeEditTask('${task.id}')"
+                                class="text-xs text-gray-400 hover:text-gray-200 px-2 py-1 transition">
+                            Annuler
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+        `}).join('');
+    });
+
+    container.innerHTML = html;
+}
+
+
+// ════════════════════════════════════════════════════════════════
+// ACTION : COMPLÉTER UNE TÂCHE — POST /api/tasks/:id/complete
+// ════════════════════════════════════════════════════════════════
+
+async function completeTask(taskId, btn) {
+    btn.disabled = true;
+    btn.textContent = '…';
+    try {
+        const res = await fetch(`/api/tasks/${taskId}/complete`, { method: 'POST' });
+        if (!res.ok) throw new Error('Erreur serveur');
+        const row = document.getElementById('task-' + taskId);
+        if (row) row.remove();
+        loadStats();
+        const list = document.getElementById('tasks-list');
+        if (!list.querySelector('[id^="task-"]')) {
+            list.innerHTML = '<p class="text-gray-400 text-sm py-6 text-center">✅ Aucune tâche en cours !</p>';
+        }
+    } catch (e) {
+        btn.disabled = false;
+        btn.textContent = '✓';
+        alert('Erreur : ' + e.message);
+    }
+}
+
+
+// ════════════════════════════════════════════════════════════════
+// COLONNE AGENDA — Source : GET /api/events?days_ahead=30
+// ════════════════════════════════════════════════════════════════
+
+async function loadEvents() {
+    showSpinner('events-spinner');
+    try {
+        const res    = await fetch('/api/events?days_ahead=30');
+        const events = await res.json();
+        if (events.error) throw new Error(events.error);
+        renderEvents(events);
+    } catch (e) {
+        document.getElementById('events-list').innerHTML =
+            `<p class="text-red-500 text-sm py-4">Erreur : ${escHtml(e.message)}</p>`;
+    } finally {
+        hideSpinner('events-spinner');
+    }
+}
+
+function renderEvents(events) {
+    const container = document.getElementById('events-list');
+
+    if (!events.length) {
+        container.innerHTML = '<p class="text-gray-400 text-sm py-6 text-center">Aucun événement dans les 30 prochains jours.</p>';
+        return;
+    }
+
+    const byDate = {};
+    events.forEach(e => {
+        const k = e.date_key || 'inconnu';
+        if (!byDate[k]) byDate[k] = [];
+        byDate[k].push(e);
+    });
+
+    const html = Object.entries(byDate).map(([dateKey, dayEvents]) => {
+        const isToday   = dayEvents[0].is_today;
+        const dateLabel = dayEvents[0].date_display || dateKey;
+
+        const evHtml = dayEvents.map(ev => `
+            <div class="ml-2 py-1.5 border-b last:border-0">
+                <div class="flex items-center gap-2">
+                    <span class="text-xs font-mono text-indigo-500 w-10 shrink-0">${escHtml(ev.time_display)}</span>
+                    <span class="text-sm font-medium text-gray-800">${escHtml(ev.summary || '(sans titre)')}</span>
+                    ${ev.calendar_name ? `<span class="text-xs text-gray-400 shrink-0">· ${escHtml(ev.calendar_name)}</span>` : ''}
+                </div>
+                ${ev.location ? `<p class="text-xs text-gray-400 ml-12">📍 ${escHtml(ev.location)}</p>` : ''}
+            </div>
+        `).join('');
+
+        return `
+            <div class="mb-3">
+                <p class="text-xs font-semibold uppercase tracking-wide mb-1 ${isToday ? 'text-indigo-600' : 'text-gray-500'}">
+                    ${isToday ? '📍 ' : ''}${escHtml(dateLabel)}${isToday ? ' — Aujourd\'hui' : ''}
+                </p>
+                ${evHtml}
+            </div>
+        `;
+    }).join('');
+
+    container.innerHTML = html;
+}
+
+
+// ════════════════════════════════════════════════════════════════
+// COLONNE WEEKENDS — calculée côté client, notes via le serveur
+// ════════════════════════════════════════════════════════════════
+
+let weekendNotes = {};
+
+// Retourne la date au format YYYY-MM-DD en heure locale.
+// ⚠️ Ne pas utiliser toISOString() : elle convertit en UTC et décale la
+// date d'un jour en soirée.
+function satKey(date) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+}
+
+async function loadWeekendNotes() {
+    try {
+        const res = await fetch('/api/weekend-notes');
+        weekendNotes = await res.json();
+    } catch(e) {
+        console.error('Erreur chargement notes weekends', e);
+    }
+}
+
+async function saveNote(satDate, value) {
+    weekendNotes[satDate] = value;
+    await fetch(`/api/weekend-notes/${satDate}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ note: value }),
+    });
+}
+
+function buildWeekends() {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const MOIS  = ['Janvier','Février','Mars','Avril','Mai','Juin',
+                   'Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+
+    const endDate = new Date(today);
+    endDate.setMonth(endDate.getMonth() + 12);
+
+    const byMonth = {};
+    const cur = new Date(today);
+    const dayOfWeek = today.getDay();
+    const daysOffset = dayOfWeek === 0 ? -1 : dayOfWeek === 6 ? 0 : (6 - dayOfWeek);
+    cur.setDate(cur.getDate() + daysOffset);
+    while (cur <= endDate) {
+        if (cur.getDay() === 6) { // 6 = samedi
+            const key   = `${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2,'0')}`;
+            const label = `${MOIS[cur.getMonth()]} ${cur.getFullYear()}`;
+            if (!byMonth[key]) byMonth[key] = { label, days: [] };
+
+            const sun = new Date(cur); sun.setDate(sun.getDate() + 1);
+            const fri = new Date(cur); fri.setDate(fri.getDate() - 1);
+            const isCurrentWeekend = today >= fri && today <= sun;
+            byMonth[key].days.push({ fri, sat: new Date(cur), sun, isCurrentWeekend });
+        }
+        cur.setDate(cur.getDate() + 1);
+    }
+    return { byMonth };
+}
+
+function renderWeekends() {
+    const container = document.getElementById('weekends-list');
+    const { byMonth } = buildWeekends();
+    const today = new Date();
+    const currentMonthKey = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;
+
+    let html = '';
+    Object.entries(byMonth).forEach(([monthKey, { label, days }]) => {
+        if (!days.length) return;
+        const isCurrentMonth = monthKey === currentMonthKey;
+
+        html += `<p class="text-xs font-semibold uppercase tracking-wide mb-1 text-indigo-600 mt-3">${isCurrentMonth ? '📍 ' : ''}${label}</p>`;
+
+        html += days.map(({ fri, sat, sun, isCurrentWeekend }) => {
+            const key  = satKey(sat);
+            const note = weekendNotes[key] || '';
+            return `
+                <div id="wk-${key}" class="ml-2 py-2 border-b last:border-0">
+                    <div class="flex items-start gap-2">
+                        <div class="text-xs font-mono ${isCurrentWeekend ? 'text-indigo-600' : 'text-indigo-500'} shrink-0 leading-5">
+                            ${isCurrentWeekend ? '👉 ' : ''}V${fri.getDate()}<br>S${sat.getDate()}<br>D${sun.getDate()}
+                        </div>
+                        <textarea
+                            data-sat="${key}"
+                            rows="1"
+                            placeholder="note…"
+                            class="flex-1 text-sm font-medium text-gray-800 bg-transparent border-0 outline-none resize-none placeholder-gray-500 leading-snug"
+                            onInput="autoResize(this)"
+                            onBlur="saveNote('${key}', this.value)"
+                        >${escHtml(note)}</textarea>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    });
+
+    container.innerHTML = html;
+    container.querySelectorAll('textarea').forEach(ta => autoResize(ta));
+}
+
+function autoResize(ta) {
+    ta.style.height = 'auto';
+    ta.style.height = ta.scrollHeight + 'px';
+}
+
+async function loadWeekends() {
+    await loadWeekendNotes();
+    renderWeekends();
+}
+
+
+// ════════════════════════════════════════════════════════════════
+// ÉDITION INLINE D'UNE TÂCHE
+// ════════════════════════════════════════════════════════════════
+
+function openEditTask(taskId) {
+    document.getElementById('task-view-' + taskId).classList.add('hidden');
+    document.getElementById('task-edit-' + taskId).classList.remove('hidden');
+    document.getElementById('task-edit-title-' + taskId).focus();
+}
+
+function closeEditTask(taskId) {
+    document.getElementById('task-edit-' + taskId).classList.add('hidden');
+    document.getElementById('task-view-' + taskId).classList.remove('hidden');
+}
+
+async function saveTask(taskId) {
+    const title = document.getElementById('task-edit-title-' + taskId).value.trim();
+    const due   = document.getElementById('task-edit-due-'   + taskId).value;
+
+    if (!title) { alert('Le titre ne peut pas être vide.'); return; }
+
+    const saveBtn = document.querySelector(`#task-edit-${taskId} button`);
+    saveBtn.disabled = true;
+    saveBtn.textContent = '…';
+
+    try {
+        const res = await fetch(`/api/tasks/${taskId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title, due }),
+        });
+        if (!res.ok) throw new Error('Erreur serveur');
+        await loadTasks();
+        loadStats();
+    } catch (e) {
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Enregistrer';
+        alert('Erreur : ' + e.message);
+    }
+}
+
+
+// ════════════════════════════════════════════════════════════════
+// RAFRAÎCHISSEMENT — au chargement puis toutes les 60 secondes
+// ════════════════════════════════════════════════════════════════
+
+function refreshAll() {
+    loadStats();
+    loadTasks();
+    loadEvents();
+    loadWeekends();
+}
+
+refreshAll();
+setInterval(refreshAll, 60_000);
+
+</script>
+{% endblock %}

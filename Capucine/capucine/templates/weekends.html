@@ -1,0 +1,233 @@
+{% extends "base.html" %}
+{% block title %}Weekends{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4">
+
+    <div class="flex items-center justify-between mb-4">
+        <h1 class="text-lg font-semibold text-gray-800">🗓️ Calendrier des weekends <span class="text-xs font-normal text-gray-400">(12 mois)</span></h1>
+        <div class="flex items-center gap-3">
+            <label class="flex items-center gap-1.5 text-xs text-gray-400 cursor-pointer select-none">
+                <input type="checkbox" id="toggle-events" class="accent-indigo-500" onchange="onToggleEvents()">
+                Afficher les événements du calendrier
+            </label>
+            <span id="weekends-spinner" class="spinner" style="display:none;"></span>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" id="weekends-grid">
+        <div class="text-center text-gray-400 py-8 col-span-full">Chargement...</div>
+    </div>
+
+</div>
+
+<!-- ── JavaScript ──────────────────────────────────────────────────────── -->
+<script>
+
+function showSpinner(id) { document.getElementById(id).style.display = 'inline-block'; }
+function hideSpinner(id) { document.getElementById(id).style.display = 'none'; }
+
+function escHtml(str) {
+    if (!str) return '';
+    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// Retourne la date au format YYYY-MM-DD en heure locale.
+// ⚠️ Ne pas utiliser toISOString() : elle convertit en UTC et décale la
+// date d'un jour en soirée.
+function dayKey(date) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+}
+
+let weekendNotes = {};
+let eventsByDate = {};
+
+// Préférence persistée : masquer/afficher les événements Google Calendar
+// sur cette page (indépendant du dashboard principal).
+let showEvents = localStorage.getItem('capucine_weekends_show_events') !== 'false';
+
+function onToggleEvents() {
+    showEvents = document.getElementById('toggle-events').checked;
+    localStorage.setItem('capucine_weekends_show_events', showEvents);
+    renderWeekends();
+}
+
+async function loadWeekendNotes() {
+    try {
+        const res = await fetch('/api/weekend-notes');
+        weekendNotes = await res.json();
+    } catch (e) {
+        console.error('Erreur chargement notes weekends', e);
+    }
+}
+
+// Événements des 12 prochains mois, groupés par date_key — pour repérer les
+// weekends déjà occupés avant d'y noter un projet. max_results=100 = plafond
+// existant de l'API (cf. capucine/dashboard.py) : au-delà, seuls les
+// événements les plus proches dans le temps sont pris en compte.
+async function loadEvents() {
+    eventsByDate = {};
+    try {
+        const res = await fetch('/api/events?days_ahead=365&max_results=100');
+        const events = await res.json();
+        if (events.error) throw new Error(events.error);
+        events.forEach(ev => {
+            const k = ev.date_key || 'inconnu';
+            if (!eventsByDate[k]) eventsByDate[k] = [];
+            eventsByDate[k].push(ev);
+        });
+    } catch (e) {
+        console.error('Erreur chargement événements', e);
+    }
+}
+
+async function saveNote(satDate, value) {
+    weekendNotes[satDate] = value;
+    const indicator = document.getElementById(`saved-${satDate}`);
+    try {
+        await fetch(`/api/weekend-notes/${satDate}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ note: value }),
+        });
+        if (indicator) {
+            indicator.textContent = '✓ enregistré';
+            indicator.style.opacity = '1';
+            setTimeout(() => { indicator.style.opacity = '0'; }, 1500);
+        }
+    } catch (e) {
+        if (indicator) {
+            indicator.textContent = '⚠ non enregistré';
+            indicator.style.opacity = '1';
+        }
+    }
+}
+
+function buildMonths() {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const MOIS = ['Janvier','Février','Mars','Avril','Mai','Juin',
+                  'Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+
+    const endDate = new Date(today);
+    endDate.setMonth(endDate.getMonth() + 12);
+
+    const byMonth = {};
+    const cur = new Date(today);
+    const dayOfWeek = today.getDay();
+    const daysOffset = dayOfWeek === 0 ? -1 : dayOfWeek === 6 ? 0 : (6 - dayOfWeek);
+    cur.setDate(cur.getDate() + daysOffset);
+
+    while (cur <= endDate) {
+        if (cur.getDay() === 6) { // 6 = samedi
+            const key   = `${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2,'0')}`;
+            const label = `${MOIS[cur.getMonth()]} ${cur.getFullYear()}`;
+            if (!byMonth[key]) byMonth[key] = { label, weekends: [] };
+
+            const sun = new Date(cur); sun.setDate(sun.getDate() + 1);
+            const fri = new Date(cur); fri.setDate(fri.getDate() - 1);
+            const isCurrentWeekend = today >= fri && today <= sun;
+            byMonth[key].weekends.push({ fri, sat: new Date(cur), sun, isCurrentWeekend });
+        }
+        cur.setDate(cur.getDate() + 1);
+    }
+    return byMonth;
+}
+
+// Événements du vendredi/samedi/dimanche d'un weekend donné.
+function eventsForWeekend(fri, sat, sun) {
+    return [dayKey(fri), dayKey(sat), dayKey(sun)]
+        .flatMap(k => eventsByDate[k] || []);
+}
+
+function renderWeekends() {
+    const grid = document.getElementById('weekends-grid');
+    const byMonth = buildMonths();
+    const today = new Date();
+    const currentMonthKey = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;
+
+    grid.innerHTML = Object.entries(byMonth).map(([monthKey, { label, weekends }]) => {
+        const isCurrentMonth = monthKey === currentMonthKey;
+
+        const rows = weekends.map(({ fri, sat, sun, isCurrentWeekend }) => {
+            const key    = dayKey(sat);
+            const note   = weekendNotes[key] || '';
+
+            let eventsHtml = '';
+            if (showEvents) {
+                eventsHtml = eventsForWeekend(fri, sat, sun).map(ev => `
+                    <div class="text-xs text-amber-500 mt-1 flex items-start gap-1">
+                        <span>📌</span>
+                        <span>${escHtml(ev.summary || '(sans titre)')}${ev.calendar_name ? ` <span class="text-gray-400">· ${escHtml(ev.calendar_name)}</span>` : ''}</span>
+                    </div>
+                `).join('');
+            }
+
+            return `
+                <div id="wk-${key}" class="py-2.5 border-b last:border-0 ${isCurrentWeekend ? 'bg-blue-50 -mx-4 px-4 rounded' : ''}">
+                    <div class="flex items-center justify-between mb-1">
+                        <div class="text-xs font-mono ${isCurrentWeekend ? 'text-indigo-600 font-semibold' : 'text-indigo-500'}">
+                            ${isCurrentWeekend ? '👉 ' : ''}Ven ${fri.getDate()} — Dim ${sun.getDate()}
+                        </div>
+                        <span id="saved-${key}" class="text-xs text-emerald-500 transition-opacity" style="opacity:0;"></span>
+                    </div>
+                    <textarea
+                        data-sat="${key}"
+                        rows="2"
+                        placeholder="note…"
+                        class="w-full text-sm font-medium text-gray-800 bg-transparent border border-transparent hover:border-gray-300 focus:border-indigo-400 rounded px-1.5 py-1 outline-none resize-none placeholder-gray-500 leading-snug transition"
+                        oninput="autoResize(this)"
+                        onblur="saveNote('${key}', this.value)"
+                    >${escHtml(note)}</textarea>
+                    ${eventsHtml}
+                </div>
+            `;
+        }).join('');
+
+        return `
+            <div class="bg-white rounded-xl shadow ${isCurrentMonth ? 'ring-2 ring-indigo-500' : ''}">
+                <div class="px-4 pt-3 pb-2 border-b">
+                    <h2 class="font-semibold text-gray-800 text-sm">${isCurrentMonth ? '📍 ' : ''}${label}</h2>
+                </div>
+                <div class="px-4 py-1">
+                    ${rows}
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    grid.querySelectorAll('textarea').forEach(ta => autoResize(ta));
+}
+
+function autoResize(ta) {
+    ta.style.height = 'auto';
+    ta.style.height = ta.scrollHeight + 'px';
+}
+
+// Une note en cours de frappe ne doit jamais être écrasée par le
+// rafraîchissement périodique (60s) : `renderWeekends` remplace tout le
+// HTML de la grille, ce qui perdrait le texte non encore sauvegardé (la
+// sauvegarde ne se déclenche qu'au blur du textarea).
+function isEditingNote() {
+    const active = document.activeElement;
+    return !!active && active.tagName === 'TEXTAREA' && active.closest('#weekends-grid');
+}
+
+async function refreshAll(isPeriodicRefresh) {
+    if (isPeriodicRefresh && isEditingNote()) return;
+    showSpinner('weekends-spinner');
+    await Promise.all([loadWeekendNotes(), loadEvents()]);
+    renderWeekends();
+    hideSpinner('weekends-spinner');
+}
+
+document.getElementById('toggle-events').checked = showEvents;
+refreshAll(false);
+setInterval(() => refreshAll(true), 60_000);
+
+</script>
+{% endblock %}

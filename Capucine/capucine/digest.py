@@ -20,6 +20,7 @@ from capucine.feeds import FeedEntry
 from capucine.llm.base import LLMClient, LLMResponse
 from capucine.mac_generate import generate_text_on_mac, generate_voice_on_mac
 from capucine.mac_wake import MacConfig, wait_for_mac
+from capucine.prompts import load_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -29,20 +30,14 @@ _MONTHS_FR = (
 )
 
 # Reconnaît les lignes produites par le LLM au format "- [Source] phrase"
-# (cf. PROMPT_TEMPLATE) pour les redisposer proprement pour Telegram.
+# (cf. capucine/prompts/digest.md) pour les redisposer proprement pour Telegram.
 _BULLET_LINE_RE = re.compile(r"^-\s*\[(?P<source>[^\]]+)\]\s*(?P<text>.+)$")
 _SEPARATOR = "─" * 24
 
 MAX_ENTRIES_FOR_PROMPT = 10
 
-PROMPT_TEMPLATE = (
-    "Traduis et résume en français, en une phrase par article, chacun des "
-    "articles ci-dessous. Ne recopie pas les titres en anglais : écris une "
-    "phrase entièrement nouvelle en français pour chaque article.\n\n"
-    "Réponds avec une liste, une ligne par article, au format :\n"
-    "- [Source] ta phrase en français\n\n"
-    "Articles :\n{articles}"
-)
+# Modifiable sans toucher au code : cf. capucine/prompts/digest.md.
+PROMPT_TEMPLATE = load_prompt("digest")
 
 
 def format_entries(entries: "list[FeedEntry]") -> str:
