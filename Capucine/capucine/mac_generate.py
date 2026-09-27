@@ -1,6 +1,7 @@
-"""Génération de texte (LM Studio) et de vocal (say + ffmpeg) sur le Mac, via
-SSH — orchestré depuis le Pi. Le Mac exécute deux scripts déployés sur son
-disque par le wizard (scripts/mac_lmstudio_generate.py, scripts/mac_say_to_ogg.sh).
+"""Génération de texte (LM Studio) et de vocal (Qwen3-TTS via mlx-audio) sur
+le Mac, via SSH — orchestré depuis le Pi. Le Mac exécute deux scripts
+déployés sur son disque par le wizard (scripts/mac_lmstudio_generate.py,
+scripts/mac_qwen_tts_to_ogg.sh).
 
 Le prompt/texte est transmis par stdin (jamais en argument shell) pour éviter
 tout problème d'échappement avec du texte arbitraire (guillemets, accents...).
@@ -8,6 +9,7 @@ tout problème d'échappement avec du texte arbitraire (guillemets, accents...).
 from __future__ import annotations
 
 import logging
+import shlex
 import subprocess
 import time
 from pathlib import Path
@@ -19,7 +21,7 @@ from capucine.mac_wake import MacConfig
 logger = logging.getLogger(__name__)
 
 REMOTE_GENERATE_SCRIPT = "~/.capucine-mac/mac_lmstudio_generate.py"
-REMOTE_SAY_SCRIPT = "~/.capucine-mac/mac_say_to_ogg.sh"
+REMOTE_TTS_SCRIPT = "~/.capucine-mac/mac_qwen_tts_to_ogg.sh"
 REMOTE_VOICE_OUTPUT_PATH = "/tmp/capucine-voice.ogg"
 
 RunFn = Callable[["list[str]", str], "subprocess.CompletedProcess"]
@@ -90,7 +92,14 @@ def generate_voice_on_mac(
     Retourne None sur tout échec (SSH, génération, rapatriement) plutôt que
     de lever une exception : un vocal manqué ne doit jamais empêcher l'envoi
     du texte du digest, qui lui a réussi (cf. décision produit)."""
-    command = _ssh_base_command(config) + ["bash", REMOTE_SAY_SCRIPT]
+    # SSH ne forwarde pas l'environnement du client par défaut : le chemin du
+    # modèle doit être injecté dans la commande distante elle-même (variable
+    # d'affectation en tête de la commande, syntaxe shell POSIX standard),
+    # pas via l'environnement du process Python local.
+    remote_command = (
+        f"CAPUCINE_TTS_MODEL_PATH={shlex.quote(config.tts_model_path)} bash {REMOTE_TTS_SCRIPT}"
+    )
+    command = _ssh_base_command(config) + [remote_command]
     try:
         result = (run or _run_ssh)(command, text)
     except Exception:  # noqa: BLE001 — un échec vocal ne doit jamais remonter, juste être loggé

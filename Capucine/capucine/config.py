@@ -59,6 +59,7 @@ class Config:
     mac_model: str
     mac_wake_timeout_s: int
     mac_retry_interval_s: int
+    mac_tts_model_path: str
     google_credentials_file: str
     google_token_file: str
     calendar_timezone: str
@@ -96,14 +97,17 @@ def load_config() -> Config:
     mac_host = os.getenv("MAC_HOST")
     mac_ssh_user = os.getenv("MAC_SSH_USER", "")
     mac_address = os.getenv("MAC_ADDRESS", "")
-    if mac_host and (not mac_ssh_user or not mac_address):
-        # Fail-fast : une MAC_ADDRESS vide fait planter send_wol_packet (ValueError)
-        # et un MAC_SSH_USER vide rend toute connexion SSH impossible — mieux
-        # vaut le signaler au démarrage qu'à la première tentative de réveil.
+    mac_tts_model_path = os.getenv("CAPUCINE_TTS_MODEL_PATH", "")
+    if mac_host and (not mac_ssh_user or not mac_address or not mac_tts_model_path):
+        # Fail-fast : une MAC_ADDRESS vide fait planter send_wol_packet (ValueError),
+        # un MAC_SSH_USER vide rend toute connexion SSH impossible, et un
+        # CAPUCINE_TTS_MODEL_PATH vide fait échouer mac_qwen_tts_to_ogg.sh à
+        # chaque génération vocale — mieux vaut le signaler au démarrage qu'à
+        # la première tentative de réveil.
         raise ValueError(
-            "[config] MAC_HOST est défini mais MAC_SSH_USER et/ou MAC_ADDRESS "
-            "sont manquants — renseignez les deux ou laissez MAC_HOST vide "
-            "pour désactiver l'intégration Mac/LM Studio."
+            "[config] MAC_HOST est défini mais MAC_SSH_USER, MAC_ADDRESS et/ou "
+            "CAPUCINE_TTS_MODEL_PATH sont manquants — renseignez les trois ou "
+            "laissez MAC_HOST vide pour désactiver l'intégration Mac/LM Studio."
         )
 
     ollama_model = os.getenv("OLLAMA_MODEL", "qwen2.5:3b")
@@ -133,6 +137,7 @@ def load_config() -> Config:
         mac_model=os.getenv("MAC_MODEL", "qwen3-coder-30b-a3b-instruct-mlx"),
         mac_wake_timeout_s=int(os.getenv("MAC_WAKE_TIMEOUT_S", "180")),
         mac_retry_interval_s=int(os.getenv("MAC_RETRY_INTERVAL_S", "10")),
+        mac_tts_model_path=mac_tts_model_path,
         google_credentials_file=os.getenv("GOOGLE_CREDENTIALS_FILE", "credentials.json"),
         google_token_file=os.getenv("GOOGLE_TOKEN_FILE", "token.json"),
         calendar_timezone=os.getenv("CALENDAR_TIMEZONE", "Europe/Paris"),

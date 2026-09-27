@@ -54,6 +54,7 @@ def build_mac_config(config: Config) -> "MacConfig | None":
         model=config.mac_model,
         wake_timeout_s=config.mac_wake_timeout_s,
         retry_interval_s=config.mac_retry_interval_s,
+        tts_model_path=config.mac_tts_model_path,
     )
 
 

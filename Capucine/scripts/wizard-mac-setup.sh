@@ -245,8 +245,8 @@ say "Ces deux scripts sont exécutés par le Pi via SSH pour générer le texte"
 say "(LM Studio) et le vocal (say + ffmpeg) du digest."
 mkdir -p "$CAPUCINE_MAC_DIR"
 cp "$REPO_SCRIPTS_DIR/mac_lmstudio_generate.py" "$CAPUCINE_MAC_DIR/mac_lmstudio_generate.py"
-cp "$REPO_SCRIPTS_DIR/mac_say_to_ogg.sh" "$CAPUCINE_MAC_DIR/mac_say_to_ogg.sh"
-chmod +x "$CAPUCINE_MAC_DIR/mac_lmstudio_generate.py" "$CAPUCINE_MAC_DIR/mac_say_to_ogg.sh"
+cp "$REPO_SCRIPTS_DIR/mac_qwen_tts_to_ogg.sh" "$CAPUCINE_MAC_DIR/mac_qwen_tts_to_ogg.sh"
+chmod +x "$CAPUCINE_MAC_DIR/mac_lmstudio_generate.py" "$CAPUCINE_MAC_DIR/mac_qwen_tts_to_ogg.sh"
 note "Scripts copiés dans $CAPUCINE_MAC_DIR."
 pause
 

@@ -71,6 +71,31 @@ def test_generate_voice_on_mac_returns_the_local_path_on_success(tmp_path):
     assert len(scp_calls) == 1
 
 
+def test_generate_voice_on_mac_forwards_configured_model_path_to_remote_command(tmp_path):
+    """SSH ne forwarde pas l'environnement du Pi par défaut — le chemin du
+    modèle Qwen3-TTS doit être injecté explicitement dans la commande
+    distante, sinon mac_qwen_tts_to_ogg.sh échoue faute de
+    CAPUCINE_TTS_MODEL_PATH (cf. bug équivalent rencontré avec l'ancien
+    pipeline `say`/CAPUCINE_SAY_VOICE, corrigé le 2026-09-27)."""
+    config = MacConfig(
+        host="10.0.0.8", ssh_user="francoissalazar", ssh_key_path="/unused",
+        mac_address="84:2f:57:d3:48:6c", model="unused",
+        tts_model_path="/Users/francoissalazar/models/Qwen3-TTS",
+    )
+    captured = {}
+
+    def fake_run(command, stdin):
+        captured["command"] = command
+        return _completed()
+
+    generate_voice_on_mac(config, "texte", tmp_path / "voice.ogg", run=fake_run, scp=lambda *a: True)
+
+    assert any(
+        "CAPUCINE_TTS_MODEL_PATH=/Users/francoissalazar/models/Qwen3-TTS" in part
+        for part in captured["command"]
+    )
+
+
 def test_generate_voice_on_mac_returns_none_when_ssh_fails(tmp_path):
     result = generate_voice_on_mac(
         _config(),

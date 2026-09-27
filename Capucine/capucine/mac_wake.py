@@ -27,6 +27,11 @@ class MacConfig:
     wake_timeout_s: int = 180
     retry_interval_s: int = 10
     ssh_connect_timeout_s: int = 5
+    # Chemin du modèle Qwen3-TTS MLX local sur le Mac, cf.
+    # scripts/mac_qwen_tts_to_ogg.sh — SSH ne forwarde pas l'environnement du
+    # Pi par défaut, cette valeur doit donc être injectée explicitement dans
+    # la commande distante (cf. capucine/mac_generate.py::generate_voice_on_mac).
+    tts_model_path: str = ""
 
 
 def send_wol_packet(

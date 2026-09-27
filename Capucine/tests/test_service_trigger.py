@@ -138,6 +138,7 @@ def test_build_mac_config_builds_a_config_when_mac_host_set(monkeypatch, tmp_pat
     monkeypatch.setenv("MAC_HOST", "10.0.0.8")
     monkeypatch.setenv("MAC_SSH_USER", "francoissalazar")
     monkeypatch.setenv("MAC_ADDRESS", "84:2f:57:d3:48:6c")
+    monkeypatch.setenv("CAPUCINE_TTS_MODEL_PATH", "/models/Qwen3-TTS")
 
     mac_config = build_mac_config(load_config())
 
