@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 import queue
 import socket
+import tempfile
 import threading
 import time
 from pathlib import Path
@@ -17,6 +18,7 @@ import requests
 
 from capucine.agents.agenda import AgendaAgent
 from capucine.agents.agenda_check import AgendaCheckAgent
+from capucine.agents.aide import AideAgent
 from capucine.agents.base import AgentResponse
 from capucine.agents.echo import EchoAgent
 from capucine.agents.ia import IaAgent
@@ -25,11 +27,13 @@ from capucine.agents.renault import RenaultAgent
 from capucine.agents.synthese import SyntheseAgent
 from capucine.config import Config, load_config
 from capucine.deps import Deps
-from capucine.dispatch import extract_message, handle_message
+from capucine.dispatch import IncomingMessage, extract_message, handle_message
 from capucine.google_calendar import GoogleCalendarClient
 from capucine.google_gmail import GmailClient
+from capucine.google_tasks import GoogleTasksClient
 from capucine.llm.ollama_client import OllamaClient
-from capucine.mac_wake import MacConfig
+from capucine.mac_stt import transcribe_voice_on_mac
+from capucine.mac_wake import MacConfig, wait_for_mac
 from capucine.router import Router
 from capucine.store import Store
 from capucine.telegram_client import TelegramClient
@@ -55,6 +59,9 @@ def build_mac_config(config: Config) -> "MacConfig | None":
         wake_timeout_s=config.mac_wake_timeout_s,
         retry_interval_s=config.mac_retry_interval_s,
         tts_model_path=config.mac_tts_model_path,
+        tts_voice=config.mac_tts_voice,
+        tts_instruct=config.mac_tts_instruct,
+        stt_model=config.mac_stt_model,
     )
 
 
@@ -85,6 +92,13 @@ def build_router(config: Config) -> Router:
         credentials_file=config.google_credentials_file,
         token_file=config.google_token_file,
     )
+    # Tâches Google Tasks accessibles depuis /agenda (vocal ou texte) — même
+    # credentials que le calendrier, cf. capucine/agents/agenda.py.
+    tasks = GoogleTasksClient(
+        credentials_file=config.google_credentials_file,
+        token_file=config.google_token_file,
+        timezone=config.calendar_timezone,
+    )
     # Client Ollama dédié au tool-calling de /agenda (modèle/timeout
     # potentiellement différents des autres agents, cf. capucine/config.py).
     agenda_llm_client = OllamaClient(
@@ -93,6 +107,7 @@ def build_router(config: Config) -> Router:
 
     return Router(
         {
+            "aide": AideAgent(),
             "echo": EchoAgent(),
             "synthese": SyntheseAgent(),
             "presse": PresseAgent(
@@ -104,7 +119,7 @@ def build_router(config: Config) -> Router:
                 mac_config=mac_config,
             ),
             "ia": IaAgent(feed_urls=config.ia_feeds, llm_client=ia_llm_client, mac_config=mac_config),
-            "agenda": AgendaAgent(calendar=calendar, llm_client=agenda_llm_client),
+            "agenda": AgendaAgent(calendar=calendar, llm_client=agenda_llm_client, tasks=tasks),
             "agenda_check": AgendaCheckAgent(
                 calendar=calendar,
                 gmail=gmail,
@@ -197,11 +212,51 @@ def serve_trigger_socket(socket_path: str, trigger_queue: "queue.Queue[str]") ->
             trigger_queue.put(command)
 
 
+def resolve_voice_message(
+    message,
+    telegram: TelegramClient,
+    mac_config: "MacConfig | None",
+    download_voice=None,
+    wait_for_mac_fn=wait_for_mac,
+    transcribe=transcribe_voice_on_mac,
+):
+    """Convertit un message vocal Telegram (message.voice_file_id) en
+    IncomingMessage texte préfixé `/agenda` — le vocal ne sert qu'au
+    calendrier/tâches, pas aux autres agents (cf. plan de reprise du vocal
+    Jeffrey), pour ne pas avoir à faire dire "agenda" en premier mot.
+
+    Retourne None si la conversion échoue (Mac non configuré, injoignable,
+    ou transcription en échec) — un message d'erreur a alors déjà été envoyé
+    à l'utilisateur, jamais d'exception propagée à l'appelant (cf. run())."""
+    if mac_config is None:
+        telegram.send_message(
+            message.chat_id, "Le vocal n'est pas disponible pour le moment, tape ta demande en texte."
+        )
+        return None
+
+    download = download_voice or telegram.download_voice
+    with tempfile.NamedTemporaryFile(suffix=".ogg") as tmp:
+        try:
+            download(message.voice_file_id, tmp.name)
+            if not wait_for_mac_fn(mac_config):
+                raise RuntimeError("[service] Mac injoignable pour la transcription vocale")
+            text = transcribe(mac_config, tmp.name)
+        except Exception:  # noqa: BLE001 — un échec de transcription ne doit jamais faire planter la boucle
+            logger.exception("[service] Échec de la transcription vocale")
+            telegram.send_message(message.chat_id, "Désolé, je n'ai pas pu comprendre le message vocal.")
+            return None
+
+    return IncomingMessage(chat_id=message.chat_id, text=f"/agenda {text}")
+
+
 def run() -> None:
     config = load_config()
     telegram = TelegramClient(config.telegram_bot_token)
     router = build_router(config)
     deps = build_deps(config)
+    # Reconstruit séparément de build_router (interne à cette fonction) :
+    # nécessaire ici pour la transcription vocale (cf. resolve_voice_message).
+    mac_config = build_mac_config(config)
 
     trigger_queue: "queue.Queue[str]" = queue.Queue()
     threading.Thread(
@@ -230,7 +285,29 @@ def run() -> None:
             message = extract_message(update)
             if message is None:
                 continue
-            reply = handle_message(message, router, deps, config.telegram_chat_id)
+            if message.voice_file_id is not None:
+                # Whitelist vérifiée avant de dépenser un réveil Mac +
+                # transcription pour un expéditeur qui sera de toute façon
+                # ignoré par handle_message (cf. dispatch.py).
+                if message.chat_id != config.telegram_chat_id:
+                    continue
+                # Accusé de réception immédiat : le réveil du Mac + la
+                # transcription peuvent prendre plusieurs dizaines de
+                # secondes (cf. MAC_WAKE_TIMEOUT_S), même logique que
+                # on_slow_command_start ci-dessous pour /presse /renault /ia.
+                telegram.send_message(message.chat_id, "🎤 Vocal reçu, en cours de traitement…")
+                message = resolve_voice_message(message, telegram, mac_config)
+                if message is None:
+                    continue
+            reply = handle_message(
+                message,
+                router,
+                deps,
+                config.telegram_chat_id,
+                on_slow_command_start=lambda command: telegram.send_message(
+                    message.chat_id, f"⏳ /{command} en cours…"
+                ),
+            )
             if reply is not None:
                 send_response(telegram, message.chat_id, reply, context="service")
 

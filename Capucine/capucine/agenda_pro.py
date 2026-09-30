@@ -82,6 +82,13 @@ def to_local_iso(dt_string: str, timezone: str) -> str:
     Les dates naïves (sans suffixe timezone) viennent du système AGENDA PRO
     en UTC — on les traite donc comme UTC avant conversion. Les dates avec
     suffixe Z ou +HH:MM sont converties normalement.
+
+    À ne pas confondre avec capucine/google_calendar.py::_localize, qui
+    traite un naïf comme heure LOCALE : deux fonctions distinctes pour deux
+    sources aux conventions différentes (emails AGENDA PRO en UTC ici, texte
+    LLM en heure locale là-bas) — pas une incohérence. Cf.
+    tests/test_calendar_timezones.py pour la matrice de tests verrouillant
+    les deux comportements.
     """
     dt = datetime.fromisoformat(dt_string.replace("Z", "+00:00"))
     if dt.tzinfo is None:

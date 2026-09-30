@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from typing import Callable
 
 from capucine.agents.base import AgentResponse
 from capucine.deps import Deps
@@ -17,11 +18,22 @@ from capucine.router import Router
 
 logger = logging.getLogger(__name__)
 
+# Commandes dont le traitement peut prendre plusieurs minutes (fetch RSS +
+# LLM + TTS sur le Mac) : un accusé de réception immédiat évite à
+# l'utilisateur de se demander si le bot a bien reçu la commande pendant
+# qu'elle tourne en silence (cf. on_slow_command_start).
+SLOW_COMMANDS = frozenset({"presse", "renault", "ia"})
+
 
 @dataclass(frozen=True)
 class IncomingMessage:
     chat_id: int
-    text: str
+    text: str = ""
+    # ID de fichier Telegram d'un message vocal (mutuellement exclusif avec
+    # `text` non vide) — laissé à None pour un message texte classique.
+    # service.py se charge du téléchargement + transcription (opérations
+    # réseau), hors du périmètre pur de ce module (cf. docstring de fichier).
+    voice_file_id: "str | None" = None
 
 
 def parse_command(text: str) -> "tuple[str, str]":
@@ -43,11 +55,16 @@ def parse_command(text: str) -> "tuple[str, str]":
 
 def extract_message(update: dict) -> "IncomingMessage | None":
     """Traduit un update brut de l'API Telegram en IncomingMessage, ou None
-    si ce n'est pas un message texte (photo, sticker, edit...)."""
+    si ce n'est ni un message texte ni un message vocal (photo, sticker,
+    edit...)."""
     message = update.get("message")
-    if not message or "text" not in message:
+    if not message:
         return None
-    return IncomingMessage(chat_id=message["chat"]["id"], text=message["text"])
+    if "text" in message:
+        return IncomingMessage(chat_id=message["chat"]["id"], text=message["text"])
+    if "voice" in message:
+        return IncomingMessage(chat_id=message["chat"]["id"], voice_file_id=message["voice"]["file_id"])
+    return None
 
 
 def handle_message(
@@ -55,10 +72,16 @@ def handle_message(
     router: Router,
     deps: Deps,
     allowed_chat_id: int,
+    on_slow_command_start: "Callable[[str], None] | None" = None,
 ) -> "AgentResponse | None":
     """Retourne la réponse à envoyer (texte + vocal éventuel), ou None si le
     message doit être ignoré (expéditeur non autorisé, ou texte sans
-    commande)."""
+    commande).
+
+    `on_slow_command_start` est appelé avant l'exécution d'une commande de
+    SLOW_COMMANDS (ex. envoyer un accusé de réception Telegram) — injecté
+    plutôt qu'un import direct de TelegramClient ici, pour garder ce module
+    testable sans appel réseau (cf. docstring de fichier)."""
     if message.chat_id != allowed_chat_id:
         # Whitelist stricte : accès strictement personnel (cf. spec).
         logger.warning("[dispatch] Message ignoré, chat_id non autorisé: %s", message.chat_id)
@@ -67,6 +90,9 @@ def handle_message(
     command, args = parse_command(message.text)
     if not command:
         return None
+
+    if command in SLOW_COMMANDS and on_slow_command_start is not None:
+        on_slow_command_start(command)
 
     agent = router.route(command)
     if agent is None:

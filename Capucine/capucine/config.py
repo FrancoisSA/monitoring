@@ -60,6 +60,9 @@ class Config:
     mac_wake_timeout_s: int
     mac_retry_interval_s: int
     mac_tts_model_path: str
+    mac_tts_voice: str
+    mac_tts_instruct: str
+    mac_stt_model: str
     google_credentials_file: str
     google_token_file: str
     calendar_timezone: str
@@ -138,6 +141,13 @@ def load_config() -> Config:
         mac_wake_timeout_s=int(os.getenv("MAC_WAKE_TIMEOUT_S", "180")),
         mac_retry_interval_s=int(os.getenv("MAC_RETRY_INTERVAL_S", "10")),
         mac_tts_model_path=mac_tts_model_path,
+        mac_tts_voice=os.getenv("CAPUCINE_TTS_VOICE", "Vivian"),
+        mac_tts_instruct=os.getenv(
+            "CAPUCINE_TTS_INSTRUCT", "Parle avec un ton enthousiaste et dynamique"
+        ),
+        # Modèle mlx-whisper pour la transcription des messages vocaux
+        # Telegram entrants (/agenda en vocal), cf. scripts/mac_whisper_transcribe.sh.
+        mac_stt_model=os.getenv("CAPUCINE_STT_MODEL", "mlx-community/whisper-large-v3-turbo"),
         google_credentials_file=os.getenv("GOOGLE_CREDENTIALS_FILE", "credentials.json"),
         google_token_file=os.getenv("GOOGLE_TOKEN_FILE", "token.json"),
         calendar_timezone=os.getenv("CALENDAR_TIMEZONE", "Europe/Paris"),

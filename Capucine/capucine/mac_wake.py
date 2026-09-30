@@ -27,11 +27,18 @@ class MacConfig:
     wake_timeout_s: int = 180
     retry_interval_s: int = 10
     ssh_connect_timeout_s: int = 5
-    # Chemin du modèle Qwen3-TTS MLX local sur le Mac, cf.
-    # scripts/mac_qwen_tts_to_ogg.sh — SSH ne forwarde pas l'environnement du
-    # Pi par défaut, cette valeur doit donc être injectée explicitement dans
-    # la commande distante (cf. capucine/mac_generate.py::generate_voice_on_mac).
+    # Modèle Qwen3-TTS-CustomVoice MLX local sur le Mac (chemin, timbre parmi
+    # les 9 intégrés, instruction de ton), cf. scripts/mac_qwen_tts_to_ogg.sh
+    # — SSH ne forwarde pas l'environnement du Pi par défaut, ces valeurs
+    # doivent donc être injectées explicitement dans la commande distante
+    # (cf. capucine/mac_generate.py::generate_voice_on_mac).
     tts_model_path: str = ""
+    tts_voice: str = "Vivian"
+    tts_instruct: str = "Parle avec un ton enthousiaste et dynamique"
+    # Modèle mlx-whisper local sur le Mac pour la transcription des messages
+    # vocaux Telegram entrants, cf. scripts/mac_whisper_transcribe.sh —
+    # capucine/mac_stt.py::transcribe_voice_on_mac.
+    stt_model: str = "mlx-community/whisper-large-v3-turbo"
 
 
 def send_wol_packet(

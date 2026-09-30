@@ -42,6 +42,17 @@ def test_extract_message_returns_none_when_message_has_no_text():
     assert extract_message(update) is None
 
 
+def test_extract_message_from_voice_update():
+    update = {
+        "update_id": 1,
+        "message": {"chat": {"id": 42}, "voice": {"file_id": "voice-file-1", "duration": 3}},
+    }
+
+    message = extract_message(update)
+
+    assert message == IncomingMessage(chat_id=42, voice_file_id="voice-file-1")
+
+
 class _StubAgent:
     def __init__(self, text="ok", raises=False):
         self._text = text
@@ -98,3 +109,33 @@ def test_handle_message_on_agent_error_returns_friendly_message(deps):
     reply = handle_message(message, router, deps, allowed_chat_id=42)
 
     assert reply.text == "Désolé, /echo a rencontré une erreur."
+
+
+def test_handle_message_notifies_start_of_a_slow_command(deps):
+    router = Router({"presse": _StubAgent(text="digest")})
+    message = IncomingMessage(chat_id=42, text="/presse")
+    notified = []
+
+    handle_message(message, router, deps, allowed_chat_id=42, on_slow_command_start=notified.append)
+
+    assert notified == ["presse"]
+
+
+def test_handle_message_does_not_notify_start_of_a_fast_command(deps):
+    router = Router({"echo": _StubAgent(text="ok")})
+    message = IncomingMessage(chat_id=42, text="/echo bonjour")
+    notified = []
+
+    handle_message(message, router, deps, allowed_chat_id=42, on_slow_command_start=notified.append)
+
+    assert notified == []
+
+
+def test_handle_message_does_not_notify_an_unauthorized_sender(deps):
+    router = Router({"presse": _StubAgent(text="digest")})
+    message = IncomingMessage(chat_id=999, text="/presse")
+    notified = []
+
+    handle_message(message, router, deps, allowed_chat_id=42, on_slow_command_start=notified.append)
+
+    assert notified == []

@@ -79,6 +79,17 @@ class GoogleCalendarClient:
         """
         Convertit une chaîne ISO 8601 en datetime localisé au bon fuseau
         horaire. Retourne une chaîne RFC 3339 pour l'API Google.
+
+        Un datetime naïf ici est traité comme heure locale (contrairement à
+        capucine/agenda_pro.py::to_local_iso, qui traite un naïf comme UTC) :
+        ce n'est PAS une incohérence, ce sont deux sources différentes avec
+        deux conventions différentes — les dates traitées ici viennent du
+        LLM de /agenda (qui raisonne en heure locale à partir du langage
+        naturel), celles de to_local_iso viennent des emails [AGENDA PRO]
+        (documentés en UTC). Cf. docs/spec/jeffrey-calendar-reprise/spec.md
+        pour le doute d'origine (sur prj-jeffrey, pas ce fichier) et
+        tests/test_calendar_timezones.py pour la matrice de tests verrouillant
+        ce comportement.
         """
         dt = datetime.fromisoformat(dt_str)
         if dt.tzinfo is None:

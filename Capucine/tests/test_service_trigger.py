@@ -10,8 +10,16 @@ import requests
 
 from capucine.agents.base import AgentResponse
 from capucine.config import load_config
+from capucine.dispatch import IncomingMessage
+from capucine.mac_wake import MacConfig
 from capucine.router import Router
-from capucine.service import build_mac_config, run_scheduled_trigger, send_response, serve_trigger_socket
+from capucine.service import (
+    build_mac_config,
+    resolve_voice_message,
+    run_scheduled_trigger,
+    send_response,
+    serve_trigger_socket,
+)
 
 
 class _FakeAgent:
@@ -42,6 +50,9 @@ class _FakeTelegram:
         if self.raise_on_voice is not None:
             raise self.raise_on_voice
         self.voices_sent.append((chat_id, str(voice_path)))
+
+    def download_voice(self, file_id: str, local_path) -> None:
+        pass  # rien à écrire, les tests de resolve_voice_message ne lisent pas le fichier
 
 
 def test_run_scheduled_trigger_sends_the_agent_response(deps):
@@ -145,6 +156,69 @@ def test_build_mac_config_builds_a_config_when_mac_host_set(monkeypatch, tmp_pat
     assert mac_config is not None
     assert mac_config.host == "10.0.0.8"
     assert mac_config.mac_address == "84:2f:57:d3:48:6c"
+
+
+def _mac_config() -> MacConfig:
+    return MacConfig(
+        host="10.0.0.8", ssh_user="francoissalazar", ssh_key_path="/unused",
+        mac_address="84:2f:57:d3:48:6c", model="unused",
+    )
+
+
+def test_resolve_voice_message_returns_none_and_replies_when_mac_not_configured():
+    telegram = _FakeTelegram()
+    message = IncomingMessage(chat_id=42, voice_file_id="voice-1")
+
+    result = resolve_voice_message(message, telegram, mac_config=None)
+
+    assert result is None
+    assert telegram.sent == [(42, "Le vocal n'est pas disponible pour le moment, tape ta demande en texte.")]
+
+
+def test_resolve_voice_message_returns_agenda_prefixed_text_on_success():
+    telegram = _FakeTelegram()
+    message = IncomingMessage(chat_id=42, voice_file_id="voice-1")
+
+    result = resolve_voice_message(
+        message,
+        telegram,
+        mac_config=_mac_config(),
+        wait_for_mac_fn=lambda config: True,
+        transcribe=lambda config, path: "ajoute un rendez-vous demain 14h",
+    )
+
+    assert result == IncomingMessage(chat_id=42, text="/agenda ajoute un rendez-vous demain 14h")
+
+
+def test_resolve_voice_message_returns_none_and_replies_when_mac_unreachable():
+    telegram = _FakeTelegram()
+    message = IncomingMessage(chat_id=42, voice_file_id="voice-1")
+
+    result = resolve_voice_message(
+        message, telegram, mac_config=_mac_config(), wait_for_mac_fn=lambda config: False
+    )
+
+    assert result is None
+    assert telegram.sent == [(42, "Désolé, je n'ai pas pu comprendre le message vocal.")]
+
+
+def test_resolve_voice_message_returns_none_and_replies_when_transcription_fails():
+    telegram = _FakeTelegram()
+    message = IncomingMessage(chat_id=42, voice_file_id="voice-1")
+
+    def raising_transcribe(config, path):
+        raise RuntimeError("[mac_stt] Transcription vide")
+
+    result = resolve_voice_message(
+        message,
+        telegram,
+        mac_config=_mac_config(),
+        wait_for_mac_fn=lambda config: True,
+        transcribe=raising_transcribe,
+    )
+
+    assert result is None
+    assert telegram.sent == [(42, "Désolé, je n'ai pas pu comprendre le message vocal.")]
 
 
 def test_serve_trigger_socket_enqueues_the_received_command():

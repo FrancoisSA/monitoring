@@ -49,3 +49,22 @@ class TelegramClient:
                 timeout=30,
             )
         response.raise_for_status()
+
+    def download_voice(self, file_id: str, local_path: "str | Path") -> None:
+        """Télécharge un message vocal reçu (OGG/Opus) vers `local_path`.
+
+        Deux appels distincts requis par l'API Telegram : getFile résout le
+        chemin de stockage interne (`file_path`), puis le fichier lui-même se
+        télécharge depuis un domaine différent (api.telegram.org/file/...,
+        pas .../bot<token>/... comme les autres méthodes)."""
+        response = requests.get(f"{self._base}/getFile", params={"file_id": file_id}, timeout=10)
+        response.raise_for_status()
+        file_path = response.json()["result"]["file_path"]
+
+        token = self._base.rsplit("/bot", 1)[1]
+        file_url = f"https://api.telegram.org/file/bot{token}/{file_path}"
+        download = requests.get(file_url, timeout=30)
+        download.raise_for_status()
+
+        with open(local_path, "wb") as f:
+            f.write(download.content)

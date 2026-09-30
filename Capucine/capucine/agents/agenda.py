@@ -1,11 +1,14 @@
-"""Agent conversationnel /agenda : langage naturel -> Google Calendar.
+"""Agent conversationnel /agenda : langage naturel -> Google Calendar / Tasks.
 
 Le modèle (Ollama, cf. capucine/llm/ollama_client.py::OllamaClient.chat)
-décide quel outil calendrier appeler à partir du texte libre de
-l'utilisateur, dans une boucle agentique bornée par MAX_TOOL_ROUNDS —
-schémas d'outils et boucle portés de
+décide quel outil appeler à partir du texte libre de l'utilisateur —
+événement calendrier ou tâche —, dans une boucle agentique bornée par
+MAX_TOOL_ROUNDS — schémas d'outils et boucle portés de
 prj-jeffrey/agent/mistral_agent.py::TOOLS/process_message, adaptés au
-protocole ToolCallingLLMClient de Capucine (cf. capucine/llm/base.py).
+protocole ToolCallingLLMClient de Capucine (cf. capucine/llm/base.py). Les
+tools Tasks ont été ajoutés lors de la reprise du vocal (cf.
+docs/spec/jeffrey-calendar-reprise) : add_task était du code mort dans
+capucine/google_tasks.py, inaccessible depuis aucun agent.
 """
 from __future__ import annotations
 
@@ -18,6 +21,7 @@ import pytz
 from capucine.agents.base import AgentResponse
 from capucine.deps import Deps
 from capucine.google_calendar import GoogleCalendarClient
+from capucine.google_tasks import GoogleTasksClient
 from capucine.llm.base import Message, ToolCallingLLMClient
 from capucine.prompts import load_prompt
 
@@ -111,15 +115,78 @@ TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "add_task",
+            "description": "Ajoute une tâche à faire dans Google Tasks (pas un événement daté).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string", "description": "Intitulé de la tâche."},
+                    "due": {"type": "string", "description": "Échéance ISO 8601. Optionnel."},
+                    "notes": {"type": "string", "description": "Notes complémentaires. Optionnel."},
+                },
+                "required": ["title"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_tasks",
+            "description": "Liste les tâches Google Tasks non terminées.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "max_results": {"type": "integer", "description": "Nombre maximum de tâches (défaut: 20)."},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "complete_task",
+            "description": "Marque une tâche Google Tasks comme terminée.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "task_id": {"type": "string", "description": "L'ID de la tâche à marquer terminée."},
+                },
+                "required": ["task_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_tasks",
+            "description": "Recherche des tâches Google Tasks par mot-clé dans le titre ou les notes.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "keyword": {"type": "string", "description": "Mot-clé à rechercher."},
+                },
+                "required": ["keyword"],
+            },
+        },
+    },
 ]
 
 
 class AgendaAgent:
     name = "agenda"
 
-    def __init__(self, calendar: GoogleCalendarClient, llm_client: ToolCallingLLMClient) -> None:
+    def __init__(
+        self,
+        calendar: GoogleCalendarClient,
+        llm_client: ToolCallingLLMClient,
+        tasks: "GoogleTasksClient | None" = None,
+    ) -> None:
         self.calendar = calendar
         self.llm_client = llm_client
+        self.tasks = tasks
         self._tool_functions = {
             "list_events": lambda args: calendar.list_events(**args),
             "add_event": lambda args: calendar.add_event(**args),
@@ -127,6 +194,17 @@ class AgendaAgent:
             "delete_event": lambda args: calendar.delete_event(**args),
             "search_events": lambda args: calendar.search_events(**args),
         }
+        # tasks optionnel (rétrocompatibilité tests/usages existants) : si
+        # absent, un appel LLM à un tool Tasks tombe sur "Outil inconnu"
+        # (cf. _execute_tool), déjà géré par le modèle comme n'importe quel
+        # tool indisponible.
+        if tasks is not None:
+            self._tool_functions.update({
+                "add_task": lambda args: tasks.add_task(**args),
+                "list_tasks": lambda args: tasks.list_tasks(**args),
+                "complete_task": lambda args: tasks.complete_task(**args),
+                "search_tasks": lambda args: tasks.search_tasks(**args),
+            })
 
     def _execute_tool(self, name: str, arguments: dict) -> str:
         """Exécute l'outil demandé et retourne le résultat en JSON — jamais
