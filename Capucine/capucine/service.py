@@ -87,6 +87,7 @@ def build_router(config: Config) -> Router:
         credentials_file=config.google_credentials_file,
         token_file=config.google_token_file,
         timezone=config.calendar_timezone,
+        extra_calendar_names=config.extra_calendar_names,
     )
     gmail = GmailClient(
         credentials_file=config.google_credentials_file,

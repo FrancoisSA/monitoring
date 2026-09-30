@@ -2,7 +2,7 @@ from datetime import date
 
 import pytz
 
-from capucine.dashboard import _classify_task_status, _enrich_event_for_display
+from capucine.dashboard import _classify_task_status, _enrich_event_for_display, _format_date_fr
 
 _TZ = pytz.timezone("Europe/Paris")
 _TODAY = date(2025, 6, 10)
@@ -42,6 +42,13 @@ def test_classify_task_status_handles_invalid_date_gracefully():
     assert due_display is None
 
 
+def test_format_date_fr_uses_french_names_regardless_of_system_locale():
+    # 2026-10-04 est un dimanche — vérifie aussi que le nom du jour est
+    # correct, pas seulement traduit (cf. bug rapporté : événement journée
+    # entière du 4 octobre affiché tel quel au lieu de "dimanche 04 octobre").
+    assert _format_date_fr(date(2026, 10, 4)) == "dimanche 04 octobre"
+
+
 def test_enrich_event_with_time_marks_today():
     event = {"id": "1", "summary": "Réunion", "start": "2025-06-10T14:00:00+02:00", "end": "", "location": ""}
 
@@ -50,6 +57,7 @@ def test_enrich_event_with_time_marks_today():
     assert enriched["is_today"] is True
     assert enriched["time_display"] == "14:00"
     assert enriched["date_key"] == "2025-06-10"
+    assert enriched["date_display"] == "mardi 10 juin"
 
 
 def test_enrich_event_with_time_not_today():
@@ -68,6 +76,7 @@ def test_enrich_all_day_event():
     assert enriched["time_display"] == "Journée"
     assert enriched["is_today"] is True
     assert enriched["date_key"] == "2025-06-10"
+    assert enriched["date_display"] == "mardi 10 juin"
 
 
 def test_enrich_event_does_not_mutate_input():

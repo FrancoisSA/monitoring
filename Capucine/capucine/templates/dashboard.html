@@ -258,20 +258,27 @@ function renderEvents(events) {
         const isToday   = dayEvents[0].is_today;
         const dateLabel = dayEvents[0].date_display || dateKey;
 
-        const evHtml = dayEvents.map(ev => `
+        const evHtml = dayEvents.map(ev => {
+            // Événements d'un calendrier additionnel (ex. HumanComédie, cf.
+            // EXTRA_CALENDAR_NAMES) affichés dans une teinte différente du
+            // calendrier principal pour les distinguer au premier coup d'œil.
+            const isExtra = !!ev.calendar_name;
+            const summaryClass = isExtra ? 'text-fuchsia-700' : 'text-gray-800';
+            const badgeClass = isExtra ? 'text-fuchsia-400' : 'text-gray-400';
+            return `
             <div class="ml-2 py-1.5 border-b last:border-0">
                 <div class="flex items-center gap-2">
                     <span class="text-xs font-mono text-indigo-500 w-10 shrink-0">${escHtml(ev.time_display)}</span>
-                    <span class="text-sm font-medium text-gray-800">${escHtml(ev.summary || '(sans titre)')}</span>
-                    ${ev.calendar_name ? `<span class="text-xs text-gray-400 shrink-0">· ${escHtml(ev.calendar_name)}</span>` : ''}
+                    <span class="text-sm font-medium ${summaryClass}">${escHtml(ev.summary || '(sans titre)')}</span>
+                    ${ev.calendar_name ? `<span class="text-xs ${badgeClass} shrink-0">· ${escHtml(ev.calendar_name)}</span>` : ''}
                 </div>
                 ${ev.location ? `<p class="text-xs text-gray-400 ml-12">📍 ${escHtml(ev.location)}</p>` : ''}
             </div>
-        `).join('');
+        `}).join('');
 
         return `
             <div class="mb-3">
-                <p class="text-xs font-semibold uppercase tracking-wide mb-1 ${isToday ? 'text-indigo-600' : 'text-gray-500'}">
+                <p class="text-xs font-semibold uppercase tracking-wide mb-1 ${isToday ? 'text-indigo-600' : 'text-gray-700'}">
                     ${isToday ? '📍 ' : ''}${escHtml(dateLabel)}${isToday ? ' — Aujourd\'hui' : ''}
                 </p>
                 ${evHtml}

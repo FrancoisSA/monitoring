@@ -49,6 +49,21 @@ from capucine.store import Store
 
 logger = logging.getLogger(__name__)
 
+# Noms français pour l'affichage des dates d'événements. `strftime("%A %d %B")`
+# dépend de la locale du système (le Pi tourne en locale C → nom en anglais),
+# et forcer locale.setlocale("fr_FR.UTF-8") exigerait que cette locale soit
+# installée sur le Pi — une table statique est plus simple et fiable.
+_JOURS_FR = ("lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche")
+_MOIS_FR = (
+    "janvier", "février", "mars", "avril", "mai", "juin",
+    "juillet", "août", "septembre", "octobre", "novembre", "décembre",
+)
+
+
+def _format_date_fr(d: date) -> str:
+    """Formate une date en français, ex. "mercredi 30 septembre"."""
+    return f"{_JOURS_FR[d.weekday()]} {d.day:02d} {_MOIS_FR[d.month - 1]}"
+
 
 def _classify_task_status(due_str: "str | None", today: date, tz) -> "tuple[str, str | None]":
     """Classe une tâche Google Tasks selon son échéance : 'overdue' (passée),
@@ -82,7 +97,7 @@ def _enrich_event_for_display(event: dict, today: date, tz) -> dict:
     if "T" in start_str:
         try:
             start_dt = datetime.fromisoformat(start_str.replace("Z", "+00:00")).astimezone(tz)
-            enriched["date_display"] = start_dt.strftime("%A %d %B")
+            enriched["date_display"] = _format_date_fr(start_dt.date())
             enriched["time_display"] = start_dt.strftime("%H:%M")
             enriched["is_today"] = start_dt.date() == today
             enriched["date_key"] = start_dt.strftime("%Y-%m-%d")
@@ -93,7 +108,14 @@ def _enrich_event_for_display(event: dict, today: date, tz) -> dict:
             enriched["date_key"] = start_str[:10]
     else:
         # Événement journée entière : `start` est déjà une date "YYYY-MM-DD".
-        enriched["date_display"] = start_str
+        # Formaté comme les événements horodatés (_format_date_fr) pour que
+        # l'affichage groupé par jour reste cohérent — sans ça le
+        # regroupement mélangeait "mercredi 30 septembre" (événements
+        # horodatés) et "2026-10-04" (journée entière) dans la même liste.
+        try:
+            enriched["date_display"] = _format_date_fr(date.fromisoformat(start_str))
+        except (ValueError, TypeError):
+            enriched["date_display"] = start_str
         enriched["time_display"] = "Journée"
         enriched["is_today"] = start_str == str(today)
         enriched["date_key"] = start_str
