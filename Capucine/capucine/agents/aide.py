@@ -13,10 +13,13 @@ _AIDE_TEXTE = """Commandes disponibles :
 /presse — revue de presse automobile électrique
 /renault — veille Renault/Ampère
 /ia — digest actualité IA & frameworks agentiques
-/agenda <demande> — assistant calendrier en langage naturel
+/agenda <demande> — calendrier et tâches en langage naturel (texte ou vocal)
+
+Envoyer un message vocal = traité automatiquement comme /agenda.
 
 /presse, /renault et /ia tentent d'abord le Mac (LM Studio + voix), avec \
-repli sur Ollama local (texte seul) si le Mac est injoignable.
+repli sur Ollama local pour le texte et Piper (voix locale sur le Pi) pour \
+le vocal si le Mac est injoignable.
 
 Dashboard (hors Telegram) : http://FSA-PI5.local:9192"""
 
