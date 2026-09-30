@@ -63,6 +63,7 @@ class Config:
     mac_tts_voice: str
     mac_tts_instruct: str
     mac_stt_model: str
+    piper_voice_model_path: str
     google_credentials_file: str
     google_token_file: str
     calendar_timezone: str
@@ -148,6 +149,10 @@ def load_config() -> Config:
         # Modèle mlx-whisper pour la transcription des messages vocaux
         # Telegram entrants (/agenda en vocal), cf. scripts/mac_whisper_transcribe.sh.
         mac_stt_model=os.getenv("CAPUCINE_STT_MODEL", "mlx-community/whisper-large-v3-turbo"),
+        # Repli vocal local (Piper) sur le Pi pour /presse /renault /ia quand
+        # le Mac est injoignable — cf. capucine/tts_piper.py. Vide = texte
+        # seul en repli (comportement d'origine).
+        piper_voice_model_path=os.getenv("PIPER_VOICE_MODEL_PATH", ""),
         google_credentials_file=os.getenv("GOOGLE_CREDENTIALS_FILE", "credentials.json"),
         google_token_file=os.getenv("GOOGLE_TOKEN_FILE", "token.json"),
         calendar_timezone=os.getenv("CALENDAR_TIMEZONE", "Europe/Paris"),

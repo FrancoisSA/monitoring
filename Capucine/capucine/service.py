@@ -111,14 +111,19 @@ def build_router(config: Config) -> Router:
             "echo": EchoAgent(),
             "synthese": SyntheseAgent(),
             "presse": PresseAgent(
-                feed_urls=config.presse_feeds, llm_client=presse_llm_client, mac_config=mac_config
+                feed_urls=config.presse_feeds, llm_client=presse_llm_client, mac_config=mac_config,
+                piper_model_path=config.piper_voice_model_path,
             ),
             "renault": RenaultAgent(
                 search_queries=config.renault_search_queries,
                 llm_client=renault_llm_client,
                 mac_config=mac_config,
+                piper_model_path=config.piper_voice_model_path,
             ),
-            "ia": IaAgent(feed_urls=config.ia_feeds, llm_client=ia_llm_client, mac_config=mac_config),
+            "ia": IaAgent(
+                feed_urls=config.ia_feeds, llm_client=ia_llm_client, mac_config=mac_config,
+                piper_model_path=config.piper_voice_model_path,
+            ),
             "agenda": AgendaAgent(calendar=calendar, llm_client=agenda_llm_client, tasks=tasks),
             "agenda_check": AgendaCheckAgent(
                 calendar=calendar,

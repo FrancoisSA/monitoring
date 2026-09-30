@@ -37,11 +37,13 @@ class RenaultAgent:
         fetch_entries: Callable[..., "list[FeedEntry]"] = fetch_recent_entries,
         llm_client: "LLMClient | None" = None,
         mac_config: "MacConfig | None" = None,
+        piper_model_path: "str | None" = None,
     ) -> None:
         self.search_queries = search_queries
         self.fetch_entries = fetch_entries
         self.llm_client = llm_client
         self.mac_config = mac_config
+        self.piper_model_path = piper_model_path
 
     def handle(self, args: str, deps: Deps) -> AgentResponse:
         feed_urls = [google_news_search_url(query) for query in self.search_queries]
@@ -64,10 +66,8 @@ class RenaultAgent:
             fallback_llm_client=llm_client,
             mac_config=self.mac_config,
             voice_output_path=Path(f"/tmp/capucine-voice-{self.name}.ogg"),
+            piper_model_path=self.piper_model_path,
         )
-
-        deps.store.save_history(self.name, "user", "veille renault/ampere")
-        deps.store.save_history(self.name, "assistant", result.response.text)  # brut, pas la version mise en forme
 
         return AgentResponse(
             text=format_for_telegram(result.response.text, _TELEGRAM_TITLE),

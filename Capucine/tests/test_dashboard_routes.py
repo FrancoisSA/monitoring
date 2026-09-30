@@ -52,7 +52,7 @@ def _make_app(tmp_path, valid_credentials, monkeypatch, calendar=None, tasks=Non
         renault_search_queries=[], renault_llm_timeout=1, ia_feeds=[], ia_llm_timeout=1,
         mac_host=None, mac_ssh_user="", mac_ssh_key_path="", mac_address="", mac_model="",
         mac_wake_timeout_s=1, mac_retry_interval_s=1, mac_tts_model_path="",
-        mac_tts_voice="", mac_tts_instruct="", mac_stt_model="",
+        mac_tts_voice="", mac_tts_instruct="", mac_stt_model="", piper_voice_model_path="",
         google_credentials_file="unused", google_token_file="unused", calendar_timezone="Europe/Paris",
         calendar_agenda_pro_name="Ampere", extra_calendar_names=[], calendar_reminder_advance_minutes=20,
         agenda_ollama_model="x", agenda_llm_timeout=1,

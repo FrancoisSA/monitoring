@@ -35,16 +35,6 @@ def test_ia_returns_the_formatted_llm_synthesis(deps, fake_llm):
     assert "DIGEST" in response.text
 
 
-def test_ia_saves_the_raw_exchange_in_history(deps, store, fake_llm):
-    fake_llm.response_text = "résumé du jour"
-    agent = IaAgent(feed_urls=["https://feed.example"], fetch_entries=lambda urls: [_entry("Titre")])
-
-    agent.handle("", deps)
-
-    history = store.get_history("ia")
-    assert history == [("user", "digest ia"), ("assistant", "résumé du jour")]
-
-
 def test_ia_with_no_entries_does_not_call_the_llm(deps, fake_llm):
     agent = IaAgent(feed_urls=["https://feed.example"], fetch_entries=lambda urls: [])
 

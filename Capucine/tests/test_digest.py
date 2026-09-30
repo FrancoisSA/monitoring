@@ -190,3 +190,42 @@ def test_generate_digest_without_mac_config_uses_fallback_directly(fake_llm):
 
     assert result.response.text == "réponse ollama"
     assert result.voice_path is None
+
+
+def test_generate_digest_falls_back_to_piper_voice_when_mac_unreachable(fake_llm, tmp_path):
+    fake_llm.response_text = "- [Source] phrase."
+    voice_path = tmp_path / "voice.ogg"
+    speech_texts = []
+
+    def fake_generate_voice_piper(text, output_path, model_path):
+        speech_texts.append((text, model_path))
+        return output_path
+
+    result = generate_digest(
+        "un prompt",
+        fallback_llm_client=fake_llm,
+        mac_config=_mac_config(),
+        voice_output_path=voice_path,
+        piper_model_path="/models/fr_FR-siwis-medium.onnx",
+        wait_for_mac_fn=lambda config: False,
+        generate_voice_piper_fn=fake_generate_voice_piper,
+    )
+
+    assert result.voice_path == voice_path
+    assert speech_texts == [("Source. phrase.", "/models/fr_FR-siwis-medium.onnx")]
+
+
+def test_generate_digest_without_piper_model_path_has_no_voice_on_fallback(fake_llm, tmp_path):
+    """piper_model_path vide (défaut) = comportement d'origine, texte seul
+    en repli — pas de régression pour les déploiements sans Piper configuré."""
+    fake_llm.response_text = "réponse ollama"
+
+    result = generate_digest(
+        "un prompt",
+        fallback_llm_client=fake_llm,
+        mac_config=_mac_config(),
+        voice_output_path=tmp_path / "voice.ogg",
+        wait_for_mac_fn=lambda config: False,
+    )
+
+    assert result.voice_path is None

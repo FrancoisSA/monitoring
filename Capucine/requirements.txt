@@ -16,3 +16,9 @@ beautifulsoup4==4.12.2
 
 # Dashboard web (tâches, agenda, weekends) — capucine/dashboard.py
 flask>=3.0.0
+
+# /presse /renault /ia — repli vocal local (Piper) sur le Pi si le Mac
+# (Qwen3-TTS via SSH) est injoignable, cf. capucine/tts_piper.py. Nécessite
+# aussi ffmpeg (déjà présent sur le Pi) et un modèle de voix téléchargé
+# séparément (cf. PIPER_VOICE_MODEL_PATH dans .env.example).
+piper-tts==1.8.0

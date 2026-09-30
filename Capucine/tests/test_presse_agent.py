@@ -40,18 +40,6 @@ def test_presse_returns_the_formatted_llm_synthesis(deps, fake_llm):
     assert "REVUE DE PRESSE" in response.text
 
 
-def test_presse_saves_the_raw_exchange_in_history(deps, store, fake_llm):
-    fake_llm.response_text = "résumé du jour"
-    agent = PresseAgent(
-        feed_urls=["https://feed.example"], fetch_entries=lambda urls: [_entry("Titre")]
-    )
-
-    agent.handle("", deps)
-
-    history = store.get_history("presse")
-    assert history == [("user", "revue de presse"), ("assistant", "résumé du jour")]
-
-
 def test_presse_with_no_entries_does_not_call_the_llm(deps, fake_llm):
     agent = PresseAgent(feed_urls=["https://feed.example"], fetch_entries=lambda urls: [])
 

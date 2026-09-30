@@ -60,17 +60,6 @@ class Store:
         with self._conn:
             self._conn.execute(
                 """
-                CREATE TABLE IF NOT EXISTS history (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    agent TEXT NOT NULL,
-                    role TEXT NOT NULL,
-                    content TEXT NOT NULL,
-                    created_at TEXT NOT NULL DEFAULT (datetime('now'))
-                )
-                """
-            )
-            self._conn.execute(
-                """
                 CREATE TABLE IF NOT EXISTS seen_links (
                     agent TEXT NOT NULL,
                     link TEXT NOT NULL,
@@ -121,21 +110,6 @@ class Store:
                 )
                 """
             )
-
-    def save_history(self, agent: str, role: str, content: str) -> None:
-        with self._conn:
-            self._conn.execute(
-                "INSERT INTO history (agent, role, content) VALUES (?, ?, ?)",
-                (agent, role, content),
-            )
-
-    def get_history(self, agent: str, limit: int = 20) -> "list[tuple[str, str]]":
-        """Renvoie les derniers échanges (role, content), du plus ancien au plus récent."""
-        rows = self._conn.execute(
-            "SELECT role, content FROM history WHERE agent = ? ORDER BY id DESC LIMIT ?",
-            (agent, limit),
-        ).fetchall()
-        return list(reversed(rows))
 
     def has_seen(self, agent: str, link: str) -> bool:
         """Utilisé par les agents de veille (ex. /renault) pour ne signaler

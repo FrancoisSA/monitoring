@@ -18,8 +18,6 @@ class SyntheseAgent:
         if not texte:
             return AgentResponse(text="Envoie /synthese suivi du texte à résumer.")
 
-        deps.store.save_history(self.name, "user", texte)
         response = deps.llm_client.generate(_PROMPT_TEMPLATE.format(texte=texte))
-        deps.store.save_history(self.name, "assistant", response.text)
 
         return AgentResponse(text=response.text)

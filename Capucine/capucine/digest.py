@@ -21,6 +21,7 @@ from capucine.llm.base import LLMClient, LLMResponse
 from capucine.mac_generate import generate_text_on_mac, generate_voice_on_mac
 from capucine.mac_wake import MacConfig, wait_for_mac
 from capucine.prompts import load_prompt
+from capucine.tts_piper import generate_voice_with_piper
 
 logger = logging.getLogger(__name__)
 
@@ -111,15 +112,22 @@ def generate_digest(
     fallback_llm_client: LLMClient,
     mac_config: "MacConfig | None" = None,
     voice_output_path: "str | Path | None" = None,
+    piper_model_path: "str | None" = None,
     wait_for_mac_fn=wait_for_mac,
     generate_text_fn=generate_text_on_mac,
     generate_voice_fn=generate_voice_on_mac,
+    generate_voice_piper_fn=generate_voice_with_piper,
 ) -> DigestResult:
     """Mécanisme générique de génération d'un digest, réutilisable par tout
     agent (/presse, /renault, /ia, et tout futur agent) : tente Mac + LM
-    Studio d'abord (avec vocal si `voice_output_path` est fourni), puis
-    bascule sur le backend local (Ollama, `fallback_llm_client`) — texte
-    seul, sans vocal — si le Mac est injoignable ou si la génération échoue.
+    Studio d'abord (avec vocal Qwen3-TTS si `voice_output_path` est fourni),
+    puis bascule sur le backend local (Ollama, `fallback_llm_client`) si le
+    Mac est injoignable ou si la génération échoue.
+
+    Le vocal du repli Ollama passe par Piper (local sur le Pi, cf.
+    capucine/tts_piper.py) si `piper_model_path` est fourni — jamais de SSH
+    ni de dépendance au Mac pour ce chemin. `piper_model_path` vide (défaut)
+    = texte seul en repli, comportement d'origine avant l'ajout de Piper.
     """
     mac_available = False
     if mac_config is not None:
@@ -142,4 +150,8 @@ def generate_digest(
                 )
             return DigestResult(response=response, voice_path=voice_path)
 
-    return DigestResult(response=fallback_llm_client.generate(prompt), voice_path=None)
+    response = fallback_llm_client.generate(prompt)
+    voice_path = None
+    if voice_output_path is not None and piper_model_path:
+        voice_path = generate_voice_piper_fn(text_for_speech(response.text), voice_output_path, piper_model_path)
+    return DigestResult(response=response, voice_path=voice_path)

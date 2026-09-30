@@ -25,6 +25,7 @@ class PresseAgent:
         fetch_entries: Callable[["list[str]"], "list[FeedEntry]"] = fetch_recent_entries,
         llm_client: "LLMClient | None" = None,
         mac_config: "MacConfig | None" = None,
+        piper_model_path: "str | None" = None,
     ) -> None:
         self.feed_urls = feed_urls
         self.fetch_entries = fetch_entries
@@ -37,6 +38,9 @@ class PresseAgent:
         # Si fourni, generate_digest tente Mac + LM Studio (texte + vocal)
         # avant de basculer sur llm_client — cf. capucine/digest.py.
         self.mac_config = mac_config
+        # Vocal du repli Ollama via Piper (local, Pi) si le Mac est
+        # injoignable — cf. capucine/tts_piper.py.
+        self.piper_model_path = piper_model_path
 
     def handle(self, args: str, deps: Deps) -> AgentResponse:
         entries = self.fetch_entries(self.feed_urls)
@@ -52,10 +56,8 @@ class PresseAgent:
             fallback_llm_client=llm_client,
             mac_config=self.mac_config,
             voice_output_path=Path(f"/tmp/capucine-voice-{self.name}.ogg"),
+            piper_model_path=self.piper_model_path,
         )
-
-        deps.store.save_history(self.name, "user", "revue de presse")
-        deps.store.save_history(self.name, "assistant", result.response.text)  # brut, pas la version mise en forme
 
         return AgentResponse(
             text=format_for_telegram(result.response.text, _TELEGRAM_TITLE),
