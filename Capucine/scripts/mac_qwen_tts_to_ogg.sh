@@ -1,20 +1,28 @@
 #!/usr/bin/env bash
 # Exécuté SUR LE MAC via SSH (cf. capucine/mac_generate.py côté Pi) : lit le
-# texte à dire sur stdin, génère un vocal via Qwen3-TTS (modèle MLX local,
-# exécuté avec `uvx` pour ne pas gérer un venv dédié à la main) puis le
-# convertit en OGG/Opus (mono, 16kHz) — format attendu par Telegram pour un
-# message vocal natif (sendVoice). Remplace l'ancien pipeline `say` (voix
-# macOS), dont la meilleure voix installée sur ce Mac s'est avérée nettement
-# moins naturelle que Qwen3-TTS à l'écoute (décision du 2026-09-27).
+# texte à dire sur stdin, génère un vocal via Qwen3-TTS-CustomVoice (modèle
+# MLX local, exécuté avec `uvx` pour ne pas gérer un venv dédié à la main)
+# puis le convertit en OGG/Opus (mono, 16kHz) — format attendu par Telegram
+# pour un message vocal natif (sendVoice).
+#
+# CustomVoice (voix parmi 9 timbres intégrés + `--instruct` pour le ton) a
+# été préféré au modèle "Base" (clonage vocal par référence, ex. voix macOS
+# Amélie) : le Base ne supporte aucun contrôle de ton et rendait une diction
+# plate jugée peu naturelle, alors qu'aucun des 9 timbres CustomVoice n'est
+# nativement français — compromis tranché en faveur du ton sur l'accent
+# (décision du 2026-09-27). Les deux modèles sont mutuellement exclusifs :
+# CustomVoice rejette --ref_audio.
 set -euo pipefail
 
 # Une commande SSH non interactive reçoit un PATH minimal : ni ffmpeg
 # (Homebrew) ni uv/uvx (installés dans ~/.local/bin) n'y sont sans ça.
 export PATH="/opt/homebrew/bin:/usr/local/bin:$HOME/.local/bin:$PATH"
 
-# Chemin du modèle Qwen3-TTS MLX local, propre à ce Mac — jamais en dur ici,
-# cf. CAPUCINE_TTS_MODEL_PATH injecté par capucine/mac_generate.py.
+# Rien de ceci n'est en dur : propre à ce Mac / ajustable sans toucher au
+# script, cf. capucine/mac_generate.py qui les injecte via SSH.
 MODEL_PATH="${CAPUCINE_TTS_MODEL_PATH:?CAPUCINE_TTS_MODEL_PATH doit être défini}"
+VOICE="${CAPUCINE_TTS_VOICE:?CAPUCINE_TTS_VOICE doit être défini}"
+INSTRUCT="${CAPUCINE_TTS_INSTRUCT:?CAPUCINE_TTS_INSTRUCT doit être défini}"
 OUTPUT_PATH="/tmp/capucine-voice.ogg"
 TMP_DIR="$(mktemp -d -t capucine-voice)"
 
@@ -25,6 +33,8 @@ TEXT="$(cat)"
 # mlx_audio écrit "<file_prefix>_000.<format>" dans --output_path.
 uvx --from mlx-audio mlx_audio.tts.generate \
   --model "$MODEL_PATH" \
+  --voice "$VOICE" \
+  --instruct "$INSTRUCT" \
   --lang_code fr \
   --output_path "$TMP_DIR" \
   --file_prefix capucine-voice \

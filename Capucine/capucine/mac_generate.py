@@ -92,13 +92,19 @@ def generate_voice_on_mac(
     Retourne None sur tout échec (SSH, génération, rapatriement) plutôt que
     de lever une exception : un vocal manqué ne doit jamais empêcher l'envoi
     du texte du digest, qui lui a réussi (cf. décision produit)."""
-    # SSH ne forwarde pas l'environnement du client par défaut : le chemin du
-    # modèle doit être injecté dans la commande distante elle-même (variable
+    # SSH ne forwarde pas l'environnement du client par défaut : ces valeurs
+    # doivent être injectées dans la commande distante elle-même (variables
     # d'affectation en tête de la commande, syntaxe shell POSIX standard),
     # pas via l'environnement du process Python local.
-    remote_command = (
-        f"CAPUCINE_TTS_MODEL_PATH={shlex.quote(config.tts_model_path)} bash {REMOTE_TTS_SCRIPT}"
+    env_assignments = " ".join(
+        f"{name}={shlex.quote(value)}"
+        for name, value in [
+            ("CAPUCINE_TTS_MODEL_PATH", config.tts_model_path),
+            ("CAPUCINE_TTS_VOICE", config.tts_voice),
+            ("CAPUCINE_TTS_INSTRUCT", config.tts_instruct),
+        ]
     )
+    remote_command = f"{env_assignments} bash {REMOTE_TTS_SCRIPT}"
     command = _ssh_base_command(config) + [remote_command]
     try:
         result = (run or _run_ssh)(command, text)
