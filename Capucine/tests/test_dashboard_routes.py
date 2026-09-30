@@ -28,6 +28,7 @@ class FakeTasks:
         self._tasks = tasks or []
         self.completed = []
         self.updated = []
+        self.added = []
 
     def list_tasks(self, max_results, show_completed):
         return [dict(t) for t in self._tasks]
@@ -39,6 +40,10 @@ class FakeTasks:
     def update_task(self, task_id, title=None, due=None):
         self.updated.append((task_id, title, due))
         return {"id": task_id, "title": title, "due": due}
+
+    def add_task(self, title, due=None):
+        self.added.append((title, due))
+        return {"id": "new-id", "title": title, "due": due}
 
 
 def _make_app(tmp_path, valid_credentials, monkeypatch, calendar=None, tasks=None):
@@ -127,6 +132,37 @@ def test_api_task_update_rejects_invalid_due_format(tmp_path, monkeypatch):
     client = app.test_client()
 
     response = client.put("/api/tasks/t1", json={"title": "x", "due": "not-a-date"})
+
+    assert response.status_code == 400
+
+
+def test_api_task_create_calls_tasks_client(tmp_path, monkeypatch):
+    tasks = FakeTasks()
+    app = _make_app(tmp_path, valid_credentials=True, monkeypatch=monkeypatch, tasks=tasks)
+    client = app.test_client()
+
+    response = client.post("/api/tasks", json={"title": "Acheter du pain", "due": "2026-01-01"})
+
+    assert response.status_code == 201
+    assert tasks.added == [("Acheter du pain", "2026-01-01T00:00:00")]
+
+
+def test_api_task_create_rejects_empty_title(tmp_path, monkeypatch):
+    tasks = FakeTasks()
+    app = _make_app(tmp_path, valid_credentials=True, monkeypatch=monkeypatch, tasks=tasks)
+    client = app.test_client()
+
+    response = client.post("/api/tasks", json={"title": "   "})
+
+    assert response.status_code == 400
+    assert tasks.added == []
+
+
+def test_api_task_create_rejects_invalid_due_format(tmp_path, monkeypatch):
+    app = _make_app(tmp_path, valid_credentials=True, monkeypatch=monkeypatch)
+    client = app.test_client()
+
+    response = client.post("/api/tasks", json={"title": "x", "due": "not-a-date"})
 
     assert response.status_code == 400
 

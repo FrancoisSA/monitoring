@@ -161,13 +161,15 @@ function renderWeekends() {
             if (showEvents) {
                 // Événements d'un calendrier additionnel (ex. HumanComédie)
                 // dans une teinte différente du calendrier principal, comme
-                // sur la colonne Agenda du tableau de bord.
+                // sur la colonne Agenda du tableau de bord — la couleur
+                // suffit à les signaler, pas besoin d'afficher l'adresse du
+                // calendrier en toutes lettres.
                 eventsHtml = eventsForWeekend(fri, sat, sun).map(ev => {
                     const colorClass = ev.calendar_name ? 'text-fuchsia-500' : 'text-amber-500';
                     return `
                     <div class="text-xs ${colorClass} mt-1 flex items-start gap-1">
                         <span>📌</span>
-                        <span>${escHtml(ev.summary || '(sans titre)')}${ev.calendar_name ? ` <span class="text-gray-400">· ${escHtml(ev.calendar_name)}</span>` : ''}</span>
+                        <span>${escHtml(ev.summary || '(sans titre)')}</span>
                     </div>
                 `}).join('');
             }

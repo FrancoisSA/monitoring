@@ -33,6 +33,24 @@
                 <h2 class="font-semibold text-gray-800">📋 Tâches</h2>
                 <span id="tasks-spinner" class="spinner"></span>
             </div>
+            <div class="px-4 pt-3 pb-2 border-b">
+                <form id="new-task-form" class="flex flex-col gap-1.5" onsubmit="return submitNewTask(event)">
+                    <div class="flex gap-1.5">
+                        <input type="text"
+                               id="new-task-title"
+                               placeholder="Nouvelle tâche…"
+                               class="flex-1 text-sm bg-gray-700 text-gray-100 border border-gray-500 rounded px-2 py-1 focus:outline-none focus:border-blue-400 placeholder-gray-400" />
+                        <input type="date"
+                               id="new-task-due"
+                               class="text-sm bg-gray-700 text-gray-100 border border-gray-500 rounded px-2 py-1 focus:outline-none focus:border-blue-400" />
+                        <button type="submit"
+                                class="shrink-0 text-xs bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded transition">
+                            Ajouter
+                        </button>
+                    </div>
+                    <p id="new-task-error" class="text-xs text-red-500 hidden"></p>
+                </form>
+            </div>
             <div class="scroll-col px-4 py-3" id="tasks-list">
                 <div class="text-center text-gray-400 py-8">Chargement...</div>
             </div>
@@ -196,6 +214,53 @@ function renderTasks(tasks) {
 
 
 // ════════════════════════════════════════════════════════════════
+// ACTION : CRÉER UNE TÂCHE — POST /api/tasks
+// ════════════════════════════════════════════════════════════════
+
+async function submitNewTask(event) {
+    event.preventDefault();
+
+    const titleInput = document.getElementById('new-task-title');
+    const dueInput    = document.getElementById('new-task-due');
+    const errorEl     = document.getElementById('new-task-error');
+    const submitBtn   = event.target.querySelector('button[type="submit"]');
+
+    const title = titleInput.value.trim();
+    errorEl.classList.add('hidden');
+
+    if (!title) {
+        errorEl.textContent = 'Le titre est obligatoire.';
+        errorEl.classList.remove('hidden');
+        return false;
+    }
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = '…';
+    try {
+        const res = await fetch('/api/tasks', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title, due: dueInput.value || null }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Erreur serveur');
+
+        titleInput.value = '';
+        dueInput.value = '';
+        await loadTasks();
+        loadStats();
+    } catch (e) {
+        errorEl.textContent = 'Erreur : ' + e.message;
+        errorEl.classList.remove('hidden');
+    } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Ajouter';
+    }
+    return false;
+}
+
+
+// ════════════════════════════════════════════════════════════════
 // ACTION : COMPLÉTER UNE TÂCHE — POST /api/tasks/:id/complete
 // ════════════════════════════════════════════════════════════════
 
@@ -261,16 +326,16 @@ function renderEvents(events) {
         const evHtml = dayEvents.map(ev => {
             // Événements d'un calendrier additionnel (ex. HumanComédie, cf.
             // EXTRA_CALENDAR_NAMES) affichés dans une teinte différente du
-            // calendrier principal pour les distinguer au premier coup d'œil.
+            // calendrier principal pour les distinguer au premier coup d'œil
+            // — la couleur suffit à les signaler, pas besoin d'afficher
+            // l'adresse du calendrier en toutes lettres.
             const isExtra = !!ev.calendar_name;
             const summaryClass = isExtra ? 'text-fuchsia-700' : 'text-gray-800';
-            const badgeClass = isExtra ? 'text-fuchsia-400' : 'text-gray-400';
             return `
             <div class="ml-2 py-1.5 border-b last:border-0">
                 <div class="flex items-center gap-2">
                     <span class="text-xs font-mono text-indigo-500 w-10 shrink-0">${escHtml(ev.time_display)}</span>
                     <span class="text-sm font-medium ${summaryClass}">${escHtml(ev.summary || '(sans titre)')}</span>
-                    ${ev.calendar_name ? `<span class="text-xs ${badgeClass} shrink-0">· ${escHtml(ev.calendar_name)}</span>` : ''}
                 </div>
                 ${ev.location ? `<p class="text-xs text-gray-400 ml-12">📍 ${escHtml(ev.location)}</p>` : ''}
             </div>
@@ -278,7 +343,7 @@ function renderEvents(events) {
 
         return `
             <div class="mb-3">
-                <p class="text-xs font-semibold uppercase tracking-wide mb-1 ${isToday ? 'text-indigo-600' : 'text-gray-700'}">
+                <p class="text-xs font-semibold uppercase tracking-wide mb-1 ${isToday ? 'text-white' : 'text-gray-700'}">
                     ${isToday ? '📍 ' : ''}${escHtml(dateLabel)}${isToday ? ' — Aujourd\'hui' : ''}
                 </p>
                 ${evHtml}

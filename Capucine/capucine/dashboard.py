@@ -19,6 +19,7 @@ Routes :
   GET  /login, /auth/status,
        /auth/login, /auth/callback → Flux OAuth Google (navigateur)
   GET  /api/tasks                 → Tâches Google Tasks (JSON)
+  POST /api/tasks                 → Crée une nouvelle tâche
   POST /api/tasks/<id>/complete   → Marque une tâche complétée
   PUT  /api/tasks/<id>            → Modifie titre/échéance d'une tâche
   GET  /api/events                → Événements Google Calendar (JSON)
@@ -244,6 +245,28 @@ def create_app(
                 task["due_display"] = due_display
 
         return jsonify(task_list)
+
+    @app.route("/api/tasks", methods=["POST"])
+    def api_task_create():
+        data = request.get_json(silent=True) or {}
+        title = str(data.get("title", "")).strip()
+        due = data.get("due") or None
+
+        if not title:
+            return jsonify({"error": "Le titre est obligatoire"}), 400
+        if due:
+            if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", due):
+                return jsonify({"error": "Format de date invalide, attendu YYYY-MM-DD"}), 400
+            due = f"{due}T00:00:00"
+
+        try:
+            result = tasks.add_task(title, due=due)
+            cache.invalidate("tasks:")
+            cache.invalidate("stats")
+            return jsonify({"ok": True, "task": result}), 201
+        except Exception as e:
+            logger.error("[dashboard] Erreur add_task : %s", e)
+            return jsonify({"error": str(e)}), 500
 
     @app.route("/api/tasks/<task_id>/complete", methods=["POST"])
     def api_task_complete(task_id):
