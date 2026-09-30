@@ -8,7 +8,7 @@ Termine par les 3 questions stratégiques que cette revue de presse devrait me p
 
 Regarde si il y a des redondances et élimine les.
 
-Adopte un ton décontracté et ajoute ue petite blague
+Adopte un ton décontracté et ajoute ue petite blague à la fin 
 
 Articles :
 {articles}
