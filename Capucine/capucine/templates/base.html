@@ -57,6 +57,14 @@
         .border-t        { border-color: #1e293b !important; }
         .border-gray-200 { border-color: #334155 !important; }
 
+        /* text-gray-700 : plus clair que text-gray-800 (#e2e8f0), pour les
+           en-têtes de jour de la colonne Agenda qui doivent ressortir plus
+           que le texte des événements eux-mêmes. Sans cet override, la
+           classe Tailwind par défaut (#374151, prévue pour fond clair)
+           s'applique dès que le CDN Tailwind (JIT asynchrone) génère sa
+           règle — d'où le texte lisible un bref instant au chargement puis
+           qui devient gris foncé illisible sur fond sombre. */
+        .text-gray-700 { color: #f8fafc !important; }
         .text-gray-800 { color: #e2e8f0 !important; }
         .text-gray-600 { color: #94a3b8 !important; }
         .text-gray-500 { color: #64748b !important; }
@@ -66,6 +74,14 @@
         .text-indigo-600 { color: #818cf8 !important; }
         .text-indigo-500 { color: #818cf8 !important; }
         .text-indigo-700 { color: #a5b4fc !important; }
+
+        /* Événements d'un calendrier additionnel (ex. HumanComédie, cf.
+           EXTRA_CALENDAR_NAMES) — mêmes teintes Tailwind fuchsia par défaut
+           que les gris/indigo ci-dessus, remplacées par des variantes
+           claires lisibles sur fond sombre. */
+        .text-fuchsia-700 { color: #f0abfc !important; }
+        .text-fuchsia-500 { color: #e879f9 !important; }
+        .text-fuchsia-400 { color: #d946ef !important; }
 
         .shadow { box-shadow: 0 1px 3px rgba(0,0,0,0.5) !important; }
 
