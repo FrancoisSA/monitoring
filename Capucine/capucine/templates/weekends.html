@@ -5,7 +5,9 @@
 <div class="container mx-auto px-4">
 
     <div class="flex items-center justify-between mb-4">
-        <h1 class="text-lg font-semibold text-gray-800">🗓️ Calendrier des weekends <span class="text-xs font-normal text-gray-400">(12 mois)</span></h1>
+        <h1 class="font-display text-lg flex items-center gap-2" style="color: var(--leaf-pale);">
+            <span class="leaf-mark" style="color: var(--violet);"></span> Calendrier des weekends <span class="eyebrow">(12 mois)</span>
+        </h1>
         <div class="flex items-center gap-3">
             <label class="flex items-center gap-1.5 text-xs text-gray-400 cursor-pointer select-none">
                 <input type="checkbox" id="toggle-events" class="accent-indigo-500" onchange="onToggleEvents()">
@@ -167,8 +169,8 @@ function renderWeekends() {
                 eventsHtml = eventsForWeekend(fri, sat, sun).map(ev => {
                     const colorClass = ev.calendar_name ? 'text-fuchsia-500' : 'text-amber-500';
                     return `
-                    <div class="text-xs ${colorClass} mt-1 flex items-start gap-1">
-                        <span>📌</span>
+                    <div class="text-xs ${colorClass} mt-1 flex items-start gap-1.5">
+                        <span class="leaf-mark" style="width:0.55em;height:0.55em;margin-top:0.3em;"></span>
                         <span>${escHtml(ev.summary || '(sans titre)')}</span>
                     </div>
                 `}).join('');
@@ -177,8 +179,8 @@ function renderWeekends() {
             return `
                 <div id="wk-${key}" class="py-2.5 border-b last:border-0 ${isCurrentWeekend ? 'bg-blue-50 -mx-4 px-4 rounded' : ''}">
                     <div class="flex items-center justify-between mb-1">
-                        <div class="text-xs font-mono ${isCurrentWeekend ? 'text-indigo-600 font-semibold' : 'text-indigo-500'}">
-                            ${isCurrentWeekend ? '👉 ' : ''}Ven ${fri.getDate()} — Dim ${sun.getDate()}
+                        <div class="text-xs font-mono flex items-center gap-1.5 ${isCurrentWeekend ? 'text-indigo-600 font-semibold' : 'text-indigo-500'}">
+                            ${isCurrentWeekend ? `<span class="leaf-mark" style="width:0.6em;height:0.6em;"></span>` : ''}Ven ${fri.getDate()} — Dim ${sun.getDate()}
                         </div>
                         <span id="saved-${key}" class="text-xs text-emerald-500 transition-opacity" style="opacity:0;"></span>
                     </div>
@@ -196,9 +198,9 @@ function renderWeekends() {
         }).join('');
 
         return `
-            <div class="bg-white rounded-xl shadow ${isCurrentMonth ? 'ring-2 ring-indigo-500' : ''}">
-                <div class="px-4 pt-3 pb-2 border-b">
-                    <h2 class="font-semibold text-gray-800 text-sm">${isCurrentMonth ? '📍 ' : ''}${label}</h2>
+            <div class="card rounded-lg ${isCurrentMonth ? 'ring-2 ring-indigo-500' : ''}">
+                <div class="px-4 pt-3 pb-2 card-header">
+                    <h2 class="font-display text-sm flex items-center gap-1.5" style="color: var(--leaf-pale);">${isCurrentMonth ? `<span class="leaf-mark" style="color: var(--bloom);"></span>` : ''}${label}</h2>
                 </div>
                 <div class="px-4 py-1">
                     ${rows}

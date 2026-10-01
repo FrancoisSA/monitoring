@@ -6,21 +6,21 @@
 
     <!-- ── Cards de métriques ───────────────────────────────────────────── -->
     <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <div class="bg-white rounded-xl shadow p-4 text-center">
-            <div class="text-3xl font-bold" style="color:#fca5a5" id="stat-overdue">—</div>
-            <div class="text-xs text-gray-500 mt-1">🔴 En retard</div>
+        <div class="card rounded-lg p-4 text-center" style="border-top: 3px solid var(--bloom-deep);">
+            <div class="font-display text-3xl" style="color: var(--bloom-deep);" id="stat-overdue">—</div>
+            <div class="eyebrow mt-1">En retard</div>
         </div>
-        <div class="bg-white rounded-xl shadow p-4 text-center">
-            <div class="text-3xl font-bold" style="color:#fed7aa" id="stat-today-tasks">—</div>
-            <div class="text-xs text-gray-500 mt-1">🟡 Tâches du jour</div>
+        <div class="card rounded-lg p-4 text-center" style="border-top: 3px solid var(--gold);">
+            <div class="font-display text-3xl" style="color: var(--gold);" id="stat-today-tasks">—</div>
+            <div class="eyebrow mt-1">Tâches du jour</div>
         </div>
-        <div class="bg-white rounded-xl shadow p-4 text-center">
-            <div class="text-3xl font-bold" style="color:#86efac" id="stat-upcoming">—</div>
-            <div class="text-xs text-gray-500 mt-1">🟢 À venir</div>
+        <div class="card rounded-lg p-4 text-center" style="border-top: 3px solid var(--leaf);">
+            <div class="font-display text-3xl" style="color: var(--leaf);" id="stat-upcoming">—</div>
+            <div class="eyebrow mt-1">À venir</div>
         </div>
-        <div class="bg-white rounded-xl shadow p-4 text-center">
-            <div class="text-3xl font-bold" style="color:#a5b4fc" id="stat-today-events">—</div>
-            <div class="text-xs text-gray-500 mt-1">📅 RDV aujourd'hui</div>
+        <div class="card rounded-lg p-4 text-center" style="border-top: 3px solid var(--violet);">
+            <div class="font-display text-3xl" style="color: var(--violet);" id="stat-today-events">—</div>
+            <div class="eyebrow mt-1">RDV aujourd'hui</div>
         </div>
     </div>
 
@@ -28,27 +28,29 @@
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
         <!-- ── Colonne Tâches ──────────────────────────────────────────── -->
-        <div class="bg-white rounded-xl shadow">
-            <div class="px-4 pt-4 pb-3 border-b flex items-center justify-between">
-                <h2 class="font-semibold text-gray-800">📋 Tâches</h2>
+        <div class="card rounded-lg">
+            <div class="px-4 pt-4 pb-3 card-header flex items-center justify-between">
+                <h2 class="font-display text-lg flex items-center gap-2" style="color: var(--leaf-pale);">
+                    <span class="leaf-mark" style="color: var(--bloom);"></span> Tâches
+                </h2>
                 <span id="tasks-spinner" class="spinner"></span>
             </div>
-            <div class="px-4 pt-3 pb-2 border-b">
+            <div class="px-4 pt-3 pb-2 card-header">
                 <form id="new-task-form" class="flex flex-col gap-1.5" onsubmit="return submitNewTask(event)">
                     <div class="flex gap-1.5">
                         <input type="text"
                                id="new-task-title"
                                placeholder="Nouvelle tâche…"
-                               class="flex-1 text-sm bg-gray-700 text-gray-100 border border-gray-500 rounded px-2 py-1 focus:outline-none focus:border-blue-400 placeholder-gray-400" />
+                               class="field flex-1 text-sm rounded px-2 py-1" />
                         <input type="date"
                                id="new-task-due"
-                               class="text-sm bg-gray-700 text-gray-100 border border-gray-500 rounded px-2 py-1 focus:outline-none focus:border-blue-400" />
+                               class="field text-sm rounded px-2 py-1" />
                         <button type="submit"
-                                class="shrink-0 text-xs bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded transition">
+                                class="btn-bloom shrink-0 text-xs px-3 py-1 rounded transition">
                             Ajouter
                         </button>
                     </div>
-                    <p id="new-task-error" class="text-xs text-red-500 hidden"></p>
+                    <p id="new-task-error" class="text-xs hidden" style="color: var(--bloom-deep);"></p>
                 </form>
             </div>
             <div class="scroll-col px-4 py-3" id="tasks-list">
@@ -57,9 +59,11 @@
         </div>
 
         <!-- ── Colonne Agenda ──────────────────────────────────────────── -->
-        <div class="bg-white rounded-xl shadow">
-            <div class="px-4 pt-4 pb-3 border-b flex items-center justify-between">
-                <h2 class="font-semibold text-gray-800">📅 Agenda <span class="text-xs font-normal text-gray-400">(30 jours)</span></h2>
+        <div class="card rounded-lg">
+            <div class="px-4 pt-4 pb-3 card-header flex items-center justify-between">
+                <h2 class="font-display text-lg flex items-center gap-2" style="color: var(--leaf-pale);">
+                    <span class="leaf-mark" style="color: var(--leaf);"></span> Agenda <span class="eyebrow">(30 jours)</span>
+                </h2>
                 <span id="events-spinner" class="spinner"></span>
             </div>
             <div class="scroll-col px-4 py-3" id="events-list">
@@ -68,9 +72,11 @@
         </div>
 
         <!-- ── Colonne Weekends ────────────────────────────────────────── -->
-        <div class="bg-white rounded-xl shadow">
-            <div class="px-4 pt-4 pb-3 border-b flex items-center justify-between">
-                <h2 class="font-semibold text-gray-800">🗓️ Weekends <span class="text-xs font-normal text-gray-400">(12 mois)</span></h2>
+        <div class="card rounded-lg">
+            <div class="px-4 pt-4 pb-3 card-header flex items-center justify-between">
+                <h2 class="font-display text-lg flex items-center gap-2" style="color: var(--leaf-pale);">
+                    <span class="leaf-mark" style="color: var(--violet);"></span> Weekends <span class="eyebrow">(12 mois)</span>
+                </h2>
             </div>
             <div class="scroll-col px-4 py-3" id="weekends-list">
                 <div class="text-center text-gray-400 py-8">Chargement...</div>
@@ -140,22 +146,22 @@ function renderTasks(tasks) {
     const container = document.getElementById('tasks-list');
 
     if (!tasks.length) {
-        container.innerHTML = '<p class="text-gray-400 text-sm py-6 text-center">✅ Aucune tâche en cours !</p>';
+        container.innerHTML = '<p class="text-gray-400 text-sm py-6 text-center">Aucune tâche en cours.</p>';
         return;
     }
 
     const groups = [
-        { key: 'overdue',  label: '🔴 En retard',   badgeClass: 'badge-overdue'  },
-        { key: 'today',    label: '🟡 Aujourd\'hui', badgeClass: 'badge-today'    },
-        { key: 'upcoming', label: '🟢 À venir',      badgeClass: 'badge-upcoming' },
+        { key: 'overdue',  label: 'En retard',     badgeClass: 'badge-overdue',  dotColor: 'var(--bloom-deep)' },
+        { key: 'today',    label: 'Aujourd\'hui',  badgeClass: 'badge-today',    dotColor: 'var(--gold)' },
+        { key: 'upcoming', label: 'À venir',       badgeClass: 'badge-upcoming', dotColor: 'var(--leaf)' },
     ];
 
     let html = '';
-    groups.forEach(({ key, label, badgeClass }) => {
+    groups.forEach(({ key, label, badgeClass, dotColor }) => {
         const filtered = tasks.filter(t => t.status_label === key);
         if (!filtered.length) return;
 
-        html += `<p class="text-xs font-semibold uppercase tracking-wide text-indigo-600 mt-3 mb-1">${label}</p>`;
+        html += `<p class="eyebrow mt-3 mb-1 flex items-center gap-1.5"><span class="leaf-mark" style="color:${dotColor}"></span> ${label}</p>`;
 
         html += filtered.map(task => {
             let dueDateValue = '';
@@ -275,7 +281,7 @@ async function completeTask(taskId, btn) {
         loadStats();
         const list = document.getElementById('tasks-list');
         if (!list.querySelector('[id^="task-"]')) {
-            list.innerHTML = '<p class="text-gray-400 text-sm py-6 text-center">✅ Aucune tâche en cours !</p>';
+            list.innerHTML = '<p class="text-gray-400 text-sm py-6 text-center">Aucune tâche en cours.</p>';
         }
     } catch (e) {
         btn.disabled = false;
@@ -343,8 +349,8 @@ function renderEvents(events) {
 
         return `
             <div class="mb-3">
-                <p class="text-xs font-semibold uppercase tracking-wide mb-1 ${isToday ? 'text-white' : 'text-gray-700'}">
-                    ${isToday ? '📍 ' : ''}${escHtml(dateLabel)}${isToday ? ' — Aujourd\'hui' : ''}
+                <p class="text-xs font-semibold uppercase tracking-wide mb-1 flex items-center gap-1.5 ${isToday ? 'text-white' : 'text-gray-700'}">
+                    ${isToday ? `<span class="leaf-mark" style="color: var(--bloom);"></span>` : ''}${escHtml(dateLabel)}${isToday ? ' — Aujourd\'hui' : ''}
                 </p>
                 ${evHtml}
             </div>
@@ -431,7 +437,7 @@ function renderWeekends() {
         if (!days.length) return;
         const isCurrentMonth = monthKey === currentMonthKey;
 
-        html += `<p class="text-xs font-semibold uppercase tracking-wide mb-1 text-indigo-600 mt-3">${isCurrentMonth ? '📍 ' : ''}${label}</p>`;
+        html += `<p class="text-xs font-semibold uppercase tracking-wide mb-1 text-indigo-600 mt-3 flex items-center gap-1.5">${isCurrentMonth ? `<span class="leaf-mark" style="color: var(--violet);"></span>` : ''}${label}</p>`;
 
         html += days.map(({ fri, sat, sun, isCurrentWeekend }) => {
             const key  = satKey(sat);
@@ -440,7 +446,7 @@ function renderWeekends() {
                 <div id="wk-${key}" class="ml-2 py-2 border-b last:border-0">
                     <div class="flex items-start gap-2">
                         <div class="text-xs font-mono ${isCurrentWeekend ? 'text-indigo-600' : 'text-indigo-500'} shrink-0 leading-5">
-                            ${isCurrentWeekend ? '👉 ' : ''}V${fri.getDate()}<br>S${sat.getDate()}<br>D${sun.getDate()}
+                            V${fri.getDate()}<br>S${sat.getDate()}<br>D${sun.getDate()}
                         </div>
                         <textarea
                             data-sat="${key}"
