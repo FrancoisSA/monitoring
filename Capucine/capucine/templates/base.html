@@ -9,200 +9,128 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Capucine">
-    <meta name="theme-color" content="#141c0f">
+    <meta name="theme-color" content="#1e1b4b">
 
     <!-- Tailwind CSS (CDN) -->
     <script src="https://cdn.tailwindcss.com"></script>
 
-    <!-- Fraunces (titres/chiffres) · Work Sans (texte) · IBM Plex Mono (horaires/étiquettes) -->
-    <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500;0,9..144,600;1,9..144,500&family=Work+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <!-- Police Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 
     <style>
-        /* ============================================================
-           CAPUCINE — identité "capucine" (fleur), pas seulement singe.
-           Fond serre-la-nuit + palette tirée de la fleur elle-même :
-           orange bloom (aujourd'hui), rouge-orangé (retard), or (bientôt),
-           violet doux (calendrier partagé HumanComédie — une autre fleur
-           du jardin). Modifiez les valeurs ici, rien ailleurs.
-           ============================================================ */
-        :root {
-            --ink:        #141c0f;
-            --panel:      #1f2a17;
-            --panel-line: #3c4a2e;
-            --leaf:       #7fa363;
-            --leaf-pale:  #c9d6b4;
-            --leaf-dim:   #5c6b4a;
-            --bloom:      #e2672b;
-            --bloom-deep: #b23a22;
-            --gold:       #e8b93a;
-            --violet:     #9c8fd9;
-        }
+        body { font-family: 'Inter', sans-serif; }
 
-        body { font-family: 'Work Sans', sans-serif; background-color: var(--ink); color: var(--leaf-pale); }
-        h1, h2, .font-display { font-family: 'Fraunces', serif; }
+        .bg-primary   { background-color: #1e1b4b; }
+        .text-primary { color: #818cf8; }
+        .border-primary { border-color: #4338ca; }
 
-        /* ── Marque : feuille de capucine (forme, pas icône de police) ── */
-        .leaf-mark {
-            display: inline-block;
-            width: 0.7em; height: 0.7em;
-            background: currentColor;
-            border-radius: 0% 60% 0% 60%;
-            transform: rotate(45deg);
-            flex-shrink: 0;
-        }
-        .leaf-mark.lg { width: 1.6rem; height: 1.6rem; }
+        .badge-overdue  { background-color: #450a0a; color: #fca5a5; }
+        .badge-today    { background-color: #431407; color: #fed7aa; }
+        .badge-upcoming { background-color: #052e16; color: #86efac; }
 
-        .eyebrow {
-            font-family: 'IBM Plex Mono', monospace;
-            font-size: 0.68rem;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-            color: var(--leaf-dim);
-        }
-
-        /* ── Boutons / champs ── */
-        .btn-bloom {
-            background: var(--bloom); color: #1a0e08;
-            font-weight: 600; transition: filter .15s, transform .15s;
-        }
-        .btn-bloom:hover { filter: brightness(1.1); }
-        .btn-bloom:active { transform: scale(0.97); }
-        .btn-bloom:disabled { opacity: 0.6; }
-
-        .field {
-            background: var(--ink); color: var(--leaf-pale);
-            border: 1px solid var(--panel-line);
-        }
-        .field::placeholder { color: var(--leaf-dim); }
-        .field:focus { outline: none; border-color: var(--bloom); }
-
-        /* ── Cartes "spécimen" ── */
-        .card { background: var(--panel); border: 1px solid var(--panel-line); }
-        .card-header { border-bottom: 1px solid var(--panel-line); }
-
-        .badge-overdue  { background: #3a160d; color: #f1a98c; }
-        .badge-today    { background: #3a2c0d; color: var(--gold); }
-        .badge-upcoming { background: #1b2a14; color: var(--leaf-pale); }
-
-        /* ── Chargement : la feuille tourne plutôt qu'un anneau générique ── */
         .spinner {
-            width: 1.1rem; height: 1.1rem;
-            background: var(--bloom);
-            border-radius: 0% 60% 0% 60%;
+            border: 3px solid #374151;
+            border-top-color: #818cf8;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 0.8s linear infinite;
             display: inline-block;
-            animation: leaf-spin 1.1s ease-in-out infinite;
         }
-        @keyframes leaf-spin {
-            0%, 100% { transform: rotate(45deg) scale(1); }
-            50%      { transform: rotate(225deg) scale(0.82); }
-        }
-        @media (prefers-reduced-motion: reduce) {
-            .spinner { animation: none; }
-        }
+        @keyframes spin { to { transform: rotate(360deg); } }
 
         .scroll-col { overflow-y: auto; max-height: 70vh; }
         .scroll-col::-webkit-scrollbar { width: 4px; }
-        .scroll-col::-webkit-scrollbar-thumb { background: var(--panel-line); border-radius: 2px; }
+        .scroll-col::-webkit-scrollbar-thumb { background: #4338ca; border-radius: 2px; }
 
         /* ============================================================
-           Réassignation des classes Tailwind utilisées dans les gabarits
-           et le JS (chaînes littérales) vers la palette ci-dessus.
+           PALETTE DARK MODE — modifiez les valeurs hex ici
            ============================================================ */
 
-        .bg-gray-50  { background-color: var(--ink) !important; }
-        .bg-white    { background-color: var(--panel) !important; }
+        body         { background-color: #0f172a; color: #e2e8f0; }
+        .bg-gray-50  { background-color: #0f172a !important; }
 
-        .border-b        { border-color: var(--panel-line) !important; }
-        .border-t        { border-color: var(--panel) !important; }
-        .border-gray-200 { border-color: var(--panel-line) !important; }
+        .bg-white    { background-color: #1e293b !important; }
+        .card        { background-color: #1e293b; border: 1px solid #334155; }
 
-        /* text-gray-700 : plus clair que text-gray-800, pour les en-têtes
-           de jour de la colonne Agenda qui doivent ressortir plus que le
-           texte des événements. Sans cet override, la classe Tailwind par
-           défaut (#374151, prévue pour fond clair) s'applique dès que le
-           CDN Tailwind (JIT asynchrone) génère sa règle — d'où le texte
-           lisible un bref instant au chargement puis illisible ensuite. */
-        .text-gray-700 { color: #f3f2ec !important; }
-        .text-gray-800 { color: var(--leaf-pale) !important; }
-        .text-gray-600 { color: var(--leaf) !important; }
-        .text-gray-500 { color: var(--leaf-dim) !important; }
-        .text-gray-400 { color: var(--leaf-dim) !important; }
-        .text-gray-300 { color: var(--panel-line) !important; }
-        .text-gray-100 { color: var(--leaf-pale) !important; }
+        .border-b        { border-color: #334155 !important; }
+        .border-t        { border-color: #1e293b !important; }
+        .border-gray-200 { border-color: #334155 !important; }
 
-        .text-indigo-600 { color: var(--bloom) !important; }
-        .text-indigo-500 { color: var(--bloom) !important; }
-        .text-indigo-700 { color: var(--gold) !important; }
+        /* text-gray-700 : plus clair que text-gray-800 (#e2e8f0), pour les
+           en-têtes de jour de la colonne Agenda qui doivent ressortir plus
+           que le texte des événements eux-mêmes. Sans cet override, la
+           classe Tailwind par défaut (#374151, prévue pour fond clair)
+           s'applique dès que le CDN Tailwind (JIT asynchrone) génère sa
+           règle — d'où le texte lisible un bref instant au chargement puis
+           qui devient gris foncé illisible sur fond sombre. */
+        .text-gray-700 { color: #f8fafc !important; }
+        .text-gray-800 { color: #e2e8f0 !important; }
+        .text-gray-600 { color: #94a3b8 !important; }
+        .text-gray-500 { color: #64748b !important; }
+        .text-gray-400 { color: #475569 !important; }
+        .text-gray-300 { color: #334155 !important; }
+
+        .text-indigo-600 { color: #818cf8 !important; }
+        .text-indigo-500 { color: #818cf8 !important; }
+        .text-indigo-700 { color: #a5b4fc !important; }
 
         /* Événements d'un calendrier additionnel (ex. HumanComédie, cf.
-           EXTRA_CALENDAR_NAMES) — une autre fleur du jardin : violet plutôt
-           que la couleur du calendrier principal, la teinte seule suffit à
-           les distinguer. */
-        .text-fuchsia-700 { color: var(--violet) !important; }
-        .text-fuchsia-500 { color: var(--violet) !important; }
-
-        .text-emerald-500 { color: var(--leaf) !important; }
-        .text-red-500     { color: var(--bloom-deep) !important; }
+           EXTRA_CALENDAR_NAMES) — mêmes teintes Tailwind fuchsia par défaut
+           que les gris/indigo ci-dessus, remplacées par des variantes
+           claires lisibles sur fond sombre. */
+        .text-fuchsia-700 { color: #f0abfc !important; }
+        .text-fuchsia-500 { color: #e879f9 !important; }
 
         .shadow { box-shadow: 0 1px 3px rgba(0,0,0,0.5) !important; }
 
-        .hover\:text-emerald-500:hover { color: var(--leaf) !important; }
-        .hover\:text-blue-400:hover    { color: var(--bloom) !important; }
+        .hover\:text-emerald-500:hover { color: #34d399 !important; }
 
-        .placeholder-gray-300::placeholder { color: var(--panel-line) !important; }
-        .placeholder-gray-500::placeholder { color: var(--leaf-dim) !important; }
-        .placeholder-gray-400::placeholder { color: var(--leaf-dim) !important; }
+        .placeholder-gray-300::placeholder { color: #334155 !important; }
+        .placeholder-gray-500::placeholder { color: #64748b !important; }
 
-        .bg-blue-50 { background-color: #2a2411 !important; }
-        .hover\:border-blue-200:hover { border-color: var(--bloom) !important; }
-        .hover\:border-gray-300:hover { border-color: var(--bloom) !important; }
-        .focus\:border-blue-400:focus { border-color: var(--bloom) !important; }
-        .focus\:border-indigo-400:focus { border-color: var(--bloom) !important; }
+        .bg-blue-50 { background-color: #1e3a5f !important; }
+        .hover\:border-blue-200:hover { border-color: #3b82f6 !important; }
 
-        .bg-blue-500         { background-color: var(--bloom) !important; color: #1a0e08 !important; }
-        .hover\:bg-blue-600:hover { filter: brightness(1.1); }
-
-        .bg-gray-700  { background-color: var(--ink) !important; }
-        .border-gray-500 { border-color: var(--panel-line) !important; }
-
-        .accent-indigo-500 { accent-color: var(--bloom); }
-
-        .ring-indigo-500 { --tw-ring-color: var(--bloom) !important; }
+        .badge-overdue  { background-color: #450a0a; color: #fca5a5; }
+        .badge-today    { background-color: #431407; color: #fed7aa; }
+        .badge-upcoming { background-color: #052e16; color: #86efac; }
     </style>
 </head>
 <body class="bg-gray-50 min-h-screen flex flex-col">
 
     <!-- ── Header ────────────────────────────────────────────────────────── -->
-    <header style="background-color: var(--panel); border-bottom: 1px solid var(--panel-line);">
+    <header class="bg-primary text-white shadow-md">
         <div class="container mx-auto px-4 py-4 flex justify-between items-center">
             <div class="flex items-center space-x-3">
-                <span class="leaf-mark lg" style="color: var(--bloom);"></span>
+                <span class="text-2xl">🐒</span>
                 <div>
-                    <h1 class="text-xl italic leading-tight" style="font-weight:500; color: var(--leaf-pale);">Capucine</h1>
-                    <p class="eyebrow">Assistant Telegram · déployé le {{ deployed_at }}</p>
+                    <h1 class="text-xl font-bold leading-tight">Capucine</h1>
+                    <p class="text-indigo-300 text-xs">Assistant Telegram &nbsp;·&nbsp; déployé le {{ deployed_at }}</p>
                 </div>
                 <nav class="flex items-center space-x-1 ml-4">
                     <a href="{{ url_for('index') }}"
-                       class="text-xs font-medium px-3 py-1.5 rounded-lg transition no-underline"
-                       style="{{ 'background: var(--bloom); color: #1a0e08;' if request.path == '/' else 'color: var(--leaf-dim);' }}">
+                       class="text-xs font-medium px-3 py-1.5 rounded-lg transition no-underline
+                              {{ 'bg-indigo-700 text-white' if request.path == '/' else 'text-indigo-300 hover:text-white' }}">
                         Dashboard
                     </a>
                     <a href="{{ url_for('weekends_page') }}"
-                       class="text-xs font-medium px-3 py-1.5 rounded-lg transition no-underline"
-                       style="{{ 'background: var(--bloom); color: #1a0e08;' if request.path == '/weekends' else 'color: var(--leaf-dim);' }}">
-                        <span class="leaf-mark" style="width:0.6em;height:0.6em;"></span> Weekends
+                       class="text-xs font-medium px-3 py-1.5 rounded-lg transition no-underline
+                              {{ 'bg-indigo-700 text-white' if request.path == '/weekends' else 'text-indigo-300 hover:text-white' }}">
+                        🗓️ Weekends
                     </a>
                 </nav>
             </div>
-            <div class="flex items-center space-x-3 text-sm" style="color: var(--leaf-dim);">
-                <span id="last-updated" class="eyebrow">—</span>
+            <div class="flex items-center space-x-3 text-sm text-indigo-300">
+                <span id="last-updated">—</span>
                 <a id="google-login-btn" href="{{ url_for('login_page', reason='expired') }}"
-                   style="display:none; background: var(--bloom-deep); color:#fff;"
+                   style="display:none; background:#ea580c; color:white;"
                    class="font-semibold px-3 py-1.5 rounded-lg hover:opacity-90 transition text-xs shadow no-underline">
-                    Reconnecter Google
+                    🔑 Google
                 </a>
                 <button onclick="refreshAll()"
-                        class="btn-bloom px-3 py-1.5 rounded-lg transition text-xs shadow">
+                        class="bg-indigo-700 text-indigo-100 font-semibold px-3 py-1.5 rounded-lg
+                               hover:bg-indigo-600 transition text-xs shadow">
                     ↺ Rafraîchir
                 </button>
             </div>
@@ -215,19 +143,19 @@
     </main>
 
     <!-- ── Footer ────────────────────────────────────────────────────────── -->
-    <footer style="background-color: var(--panel); border-top: 1px solid var(--panel-line);" class="py-3">
-        <div class="container mx-auto px-4 text-center eyebrow">
+    <footer style="background-color:#1e293b; border-top: 1px solid #334155;" class="py-3">
+        <div class="container mx-auto px-4 text-center text-xs text-gray-400">
             Capucine — Dashboard personnel · Raspberry Pi
         </div>
     </footer>
 
 <!-- Bannière de reconnexion Google — affichée si une requête API retourne 401 -->
 <div id="auth-banner" style="display:none; position:fixed; bottom:0; left:0; right:0; z-index:999;
-     background: var(--bloom-deep); color:#fde8df; padding:12px 24px;
+     background:#7c2d12; color:#fed7aa; padding:12px 24px;
      align-items:center; justify-content:space-between;">
     <span>⚠️ Connexion Google expirée — le dashboard ne peut plus accéder à vos données.</span>
     <a href="{{ url_for('login_page', reason='expired') }}"
-       style="background:#1a0e08; color:#fde8df; padding:6px 16px; border-radius:6px;
+       style="background:#ea580c; color:white; padding:6px 16px; border-radius:6px;
               font-weight:600; text-decoration:none; font-size:0.875rem;">
         Reconnecter Google
     </a>
