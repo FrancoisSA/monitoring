@@ -51,7 +51,12 @@ pas de login applicatif.
 - **Pas de réponse du bot** : vérifier que le service tourne sur le Pi —
   `sudo systemctl status capucine.service`
 - **Le vocal ne fonctionne pas** : la transcription (texte → commande)
-  nécessite que le Mac soit configuré et joignable — pas de repli local sur
-  le Pi pour cette étape. La réponse vocale de `/presse` `/renault` `/ia`,
-  elle, a un repli automatique (Piper, sur le Pi) si le Mac est indisponible.
+  utilise le Mac en priorité (plus précis) et bascule automatiquement sur un
+  repli local sur le Pi (whisper.cpp) s'il est injoignable — qualité de
+  transcription légèrement inférieure dans ce cas, mais ça répond toujours.
+  Si le message "Désolé, je n'ai pas pu comprendre le message vocal."
+  apparaît malgré tout, c'est que les deux ont échoué (vocal inaudible,
+  trop de bruit de fond...). La réponse vocale de `/presse` `/renault`
+  `/ia`, elle, a aussi un repli automatique (Piper, sur le Pi) si le Mac
+  est indisponible.
 - **Voir les logs** : `sudo journalctl -u capucine.service -n 50 --no-pager`
