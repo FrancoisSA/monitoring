@@ -63,6 +63,7 @@ def _make_app(tmp_path, valid_credentials, monkeypatch, calendar=None, tasks=Non
         agenda_ollama_model="x", agenda_llm_timeout=1,
         dashboard_port=9192, oauth_redirect_uri="http://localhost:9192/auth/callback",
         dashboard_cache_ttl_seconds=0,
+        pi_whisper_cli_path="", pi_whisper_model_path="", pi_stt_timeout_s=1,
     )
 
     app = create_app(

@@ -12,6 +12,7 @@ from capucine.agents.base import AgentResponse
 from capucine.config import load_config
 from capucine.dispatch import IncomingMessage
 from capucine.mac_wake import MacConfig
+from capucine.pi_stt import PiSttConfig
 from capucine.router import Router
 from capucine.service import (
     build_mac_config,
@@ -219,6 +220,82 @@ def test_resolve_voice_message_returns_none_and_replies_when_transcription_fails
 
     assert result is None
     assert telegram.sent == [(42, "Désolé, je n'ai pas pu comprendre le message vocal.")]
+
+
+def _pi_stt_config() -> PiSttConfig:
+    return PiSttConfig(whisper_cli_path="/unused/whisper-cli", whisper_model_path="/unused/model.bin")
+
+
+def test_resolve_voice_message_falls_back_to_pi_when_mac_unreachable():
+    telegram = _FakeTelegram()
+    message = IncomingMessage(chat_id=42, voice_file_id="voice-1")
+
+    result = resolve_voice_message(
+        message,
+        telegram,
+        mac_config=_mac_config(),
+        wait_for_mac_fn=lambda config: False,
+        pi_stt_config=_pi_stt_config(),
+        transcribe_on_pi=lambda config, path: "ajoute un rendez-vous demain 14h",
+    )
+
+    assert result == IncomingMessage(chat_id=42, text="/agenda ajoute un rendez-vous demain 14h")
+    assert telegram.sent == []  # pas d'erreur envoyée : le repli a réussi
+
+
+def test_resolve_voice_message_falls_back_to_pi_when_mac_transcription_fails():
+    telegram = _FakeTelegram()
+    message = IncomingMessage(chat_id=42, voice_file_id="voice-1")
+
+    def raising_transcribe(config, path):
+        raise RuntimeError("[mac_stt] Transcription vide")
+
+    result = resolve_voice_message(
+        message,
+        telegram,
+        mac_config=_mac_config(),
+        wait_for_mac_fn=lambda config: True,
+        transcribe=raising_transcribe,
+        pi_stt_config=_pi_stt_config(),
+        transcribe_on_pi=lambda config, path: "ajoute une tâche acheter du pain",
+    )
+
+    assert result == IncomingMessage(chat_id=42, text="/agenda ajoute une tâche acheter du pain")
+
+
+def test_resolve_voice_message_returns_none_and_replies_when_mac_and_pi_both_fail():
+    telegram = _FakeTelegram()
+    message = IncomingMessage(chat_id=42, voice_file_id="voice-1")
+
+    def raising_transcribe_on_pi(config, path):
+        raise RuntimeError("[pi_stt] Transcription vide")
+
+    result = resolve_voice_message(
+        message,
+        telegram,
+        mac_config=_mac_config(),
+        wait_for_mac_fn=lambda config: False,
+        pi_stt_config=_pi_stt_config(),
+        transcribe_on_pi=raising_transcribe_on_pi,
+    )
+
+    assert result is None
+    assert telegram.sent == [(42, "Désolé, je n'ai pas pu comprendre le message vocal.")]
+
+
+def test_resolve_voice_message_uses_pi_directly_when_mac_not_configured():
+    telegram = _FakeTelegram()
+    message = IncomingMessage(chat_id=42, voice_file_id="voice-1")
+
+    result = resolve_voice_message(
+        message,
+        telegram,
+        mac_config=None,
+        pi_stt_config=_pi_stt_config(),
+        transcribe_on_pi=lambda config, path: "liste mes tâches",
+    )
+
+    assert result == IncomingMessage(chat_id=42, text="/agenda liste mes tâches")
 
 
 def test_serve_trigger_socket_enqueues_the_received_command():

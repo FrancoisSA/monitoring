@@ -34,6 +34,7 @@ from capucine.google_tasks import GoogleTasksClient
 from capucine.llm.ollama_client import OllamaClient
 from capucine.mac_stt import transcribe_voice_on_mac
 from capucine.mac_wake import MacConfig, wait_for_mac
+from capucine.pi_stt import PiSttConfig, transcribe_voice_on_pi
 from capucine.router import Router
 from capucine.store import Store
 from capucine.telegram_client import TelegramClient
@@ -62,6 +63,20 @@ def build_mac_config(config: Config) -> "MacConfig | None":
         tts_voice=config.mac_tts_voice,
         tts_instruct=config.mac_tts_instruct,
         stt_model=config.mac_stt_model,
+    )
+
+
+def build_pi_stt_config(config: Config) -> "PiSttConfig | None":
+    """None si PI_WHISPER_CLI_PATH/PI_WHISPER_MODEL_PATH ne sont pas
+    configurés — le repli vocal local (cf. capucine/pi_stt.py) est alors
+    désactivé et un Mac injoignable fait échouer la transcription (comme
+    avant son introduction)."""
+    if not config.pi_whisper_cli_path or not config.pi_whisper_model_path:
+        return None
+    return PiSttConfig(
+        whisper_cli_path=config.pi_whisper_cli_path,
+        whisper_model_path=config.pi_whisper_model_path,
+        timeout_s=config.pi_stt_timeout_s,
     )
 
 
@@ -225,16 +240,24 @@ def resolve_voice_message(
     download_voice=None,
     wait_for_mac_fn=wait_for_mac,
     transcribe=transcribe_voice_on_mac,
+    pi_stt_config: "PiSttConfig | None" = None,
+    transcribe_on_pi=transcribe_voice_on_pi,
 ):
     """Convertit un message vocal Telegram (message.voice_file_id) en
     IncomingMessage texte préfixé `/agenda` — le vocal ne sert qu'au
     calendrier/tâches, pas aux autres agents (cf. plan de reprise du vocal
     Jeffrey), pour ne pas avoir à faire dire "agenda" en premier mot.
 
-    Retourne None si la conversion échoue (Mac non configuré, injoignable,
-    ou transcription en échec) — un message d'erreur a alors déjà été envoyé
-    à l'utilisateur, jamais d'exception propagée à l'appelant (cf. run())."""
-    if mac_config is None:
+    Le Mac (whisper-large-v3-turbo, plus précis) est toujours prioritaire.
+    S'il est injoignable ou échoue, repli sur whisper.cpp en local sur le Pi
+    (pi_stt_config, cf. capucine/pi_stt.py) si configuré — sinon, comme
+    avant son introduction, un Mac en échec fait échouer la transcription.
+
+    Retourne None si toutes les pistes échouent (aucun backend configuré,
+    Mac et Pi tous deux injoignables/en échec) — un message d'erreur a alors
+    déjà été envoyé à l'utilisateur, jamais d'exception propagée à
+    l'appelant (cf. run())."""
+    if mac_config is None and pi_stt_config is None:
         telegram.send_message(
             message.chat_id, "Le vocal n'est pas disponible pour le moment, tape ta demande en texte."
         )
@@ -242,13 +265,24 @@ def resolve_voice_message(
 
     download = download_voice or telegram.download_voice
     with tempfile.NamedTemporaryFile(suffix=".ogg") as tmp:
-        try:
-            download(message.voice_file_id, tmp.name)
-            if not wait_for_mac_fn(mac_config):
-                raise RuntimeError("[service] Mac injoignable pour la transcription vocale")
-            text = transcribe(mac_config, tmp.name)
-        except Exception:  # noqa: BLE001 — un échec de transcription ne doit jamais faire planter la boucle
-            logger.exception("[service] Échec de la transcription vocale")
+        download(message.voice_file_id, tmp.name)
+
+        text = None
+        if mac_config is not None:
+            try:
+                if not wait_for_mac_fn(mac_config):
+                    raise RuntimeError("[service] Mac injoignable pour la transcription vocale")
+                text = transcribe(mac_config, tmp.name)
+            except Exception:  # noqa: BLE001 — un échec Mac ne doit jamais faire planter la boucle, juste déclencher le repli Pi
+                logger.warning("[service] Échec de la transcription vocale sur le Mac", exc_info=True)
+
+        if text is None and pi_stt_config is not None:
+            try:
+                text = transcribe_on_pi(pi_stt_config, tmp.name)
+            except Exception:  # noqa: BLE001 — idem, dernier recours avant l'échec utilisateur
+                logger.exception("[service] Échec de la transcription vocale sur le Pi")
+
+        if text is None:
             telegram.send_message(message.chat_id, "Désolé, je n'ai pas pu comprendre le message vocal.")
             return None
 
@@ -263,6 +297,7 @@ def run() -> None:
     # Reconstruit séparément de build_router (interne à cette fonction) :
     # nécessaire ici pour la transcription vocale (cf. resolve_voice_message).
     mac_config = build_mac_config(config)
+    pi_stt_config = build_pi_stt_config(config)
 
     trigger_queue: "queue.Queue[str]" = queue.Queue()
     threading.Thread(
@@ -302,7 +337,7 @@ def run() -> None:
                 # secondes (cf. MAC_WAKE_TIMEOUT_S), même logique que
                 # on_slow_command_start ci-dessous pour /presse /renault /ia.
                 telegram.send_message(message.chat_id, "🎤 Vocal reçu, en cours de traitement…")
-                message = resolve_voice_message(message, telegram, mac_config)
+                message = resolve_voice_message(message, telegram, mac_config, pi_stt_config=pi_stt_config)
                 if message is None:
                     continue
             reply = handle_message(

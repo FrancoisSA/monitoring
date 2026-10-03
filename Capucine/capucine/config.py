@@ -75,6 +75,9 @@ class Config:
     dashboard_port: int
     oauth_redirect_uri: str
     dashboard_cache_ttl_seconds: int
+    pi_whisper_cli_path: str
+    pi_whisper_model_path: str
+    pi_stt_timeout_s: int
 
 
 def _parse_comma_separated(raw: "str | None", default: "tuple[str, ...]") -> "list[str]":
@@ -166,7 +169,11 @@ def load_config() -> Config:
         # OLLAMA_MODEL par défaut, surchageable si le tool-calling se révèle
         # peu fiable sur un petit modèle (cf. capucine/llm/ollama_client.py).
         agenda_ollama_model=os.getenv("AGENDA_OLLAMA_MODEL") or ollama_model,
-        agenda_llm_timeout=int(os.getenv("AGENDA_LLM_TIMEOUT", "60")),
+        # 120s : le prompt tool-calling (schéma des 6 outils agenda injecté à
+        # chaque appel) a mesuré ~28-60s+ sur qwen2.5:3b/Pi 5, contre ~14s pour
+        # un simple prompt texte — 60s était trop juste (incident 2026-10-03,
+        # ReadTimeoutError sur /api/chat).
+        agenda_llm_timeout=int(os.getenv("AGENDA_LLM_TIMEOUT", "120")),
         # 9090 = Pi Monitor, 9191 = Jeffrey : 9192 par défaut pour Capucine sur le même Pi.
         dashboard_port=int(os.getenv("DASHBOARD_PORT", "9192")),
         oauth_redirect_uri=os.getenv("OAUTH_REDIRECT_URI", "http://localhost:9192/auth/callback"),
@@ -174,4 +181,10 @@ def load_config() -> Config:
         # capucine/cache.py). Inférieur au rafraîchissement client (60s) pour
         # rester réactif après une action utilisateur (tâche complétée...).
         dashboard_cache_ttl_seconds=int(os.getenv("DASHBOARD_CACHE_TTL_SECONDS", "30")),
+        # Repli de transcription vocale en local sur le Pi (whisper.cpp) quand
+        # le Mac est injoignable après le réveil WoL — cf. capucine/pi_stt.py.
+        # Vide = repli désactivé (comportement d'origine : échec direct).
+        pi_whisper_cli_path=os.getenv("PI_WHISPER_CLI_PATH", ""),
+        pi_whisper_model_path=os.getenv("PI_WHISPER_MODEL_PATH", ""),
+        pi_stt_timeout_s=int(os.getenv("PI_STT_TIMEOUT_S", "60")),
     )
