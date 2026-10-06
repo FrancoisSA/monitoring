@@ -263,3 +263,58 @@ def test_articles_beyond_the_cap_are_kept_for_the_next_run(tmp_path):
 
     assert len(first_run) == MAX_ENTRIES_FOR_PROMPT
     assert len(second_run) == 3
+
+
+def test_generate_digest_uses_mac_voice_even_when_mac_text_fails(fake_llm, tmp_path):
+    fake_llm.response_text = "- [Source] phrase ollama."
+    voice_path = tmp_path / "voice.ogg"
+    mac_voice_calls, piper_calls = [], []
+
+    def raising_generate_text(config, prompt):
+        raise RuntimeError("serveur LLM du Mac arrêté")
+
+    def fake_generate_voice(config, text, output_path):
+        mac_voice_calls.append(text)
+        return output_path
+
+    result = generate_digest(
+        "un prompt",
+        fallback_llm_client=fake_llm,
+        mac_config=_mac_config(),
+        voice_output_path=voice_path,
+        piper_model_path="/models/fr_FR-siwis-medium.onnx",
+        wait_for_mac_fn=lambda config: True,
+        generate_text_fn=raising_generate_text,
+        generate_voice_fn=fake_generate_voice,
+        generate_voice_piper_fn=lambda *args: piper_calls.append(args),
+    )
+
+    assert result.response.text == "- [Source] phrase ollama."
+    assert result.voice_path == voice_path
+    assert mac_voice_calls == ["Source. phrase ollama."]
+    assert piper_calls == []
+
+
+def test_generate_digest_falls_back_to_piper_when_mac_voice_fails(fake_llm, tmp_path):
+    voice_path = tmp_path / "voice.ogg"
+    piper_calls = []
+
+    def fake_generate_voice_piper(text, output_path, model_path):
+        piper_calls.append(text)
+        return output_path
+
+    result = generate_digest(
+        "un prompt",
+        fallback_llm_client=fake_llm,
+        mac_config=_mac_config(),
+        voice_output_path=voice_path,
+        piper_model_path="/models/fr_FR-siwis-medium.onnx",
+        wait_for_mac_fn=lambda config: True,
+        generate_text_fn=lambda config, prompt: LLMResponse(text="- [Source] mac.", model="m", latency_ms=0.0),
+        generate_voice_fn=lambda config, text, output_path: None,
+        generate_voice_piper_fn=fake_generate_voice_piper,
+    )
+
+    assert result.response.text == "- [Source] mac."
+    assert result.voice_path == voice_path
+    assert piper_calls == ["Source. mac."]

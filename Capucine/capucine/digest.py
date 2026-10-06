@@ -140,15 +140,12 @@ def generate_digest(
     generate_voice_piper_fn=generate_voice_with_piper,
 ) -> DigestResult:
     """Mécanisme générique de génération d'un digest, réutilisable par tout
-    agent (/presse, /renault, /ia, et tout futur agent) : tente Mac + LM
-    Studio d'abord (avec vocal Qwen3-TTS si `voice_output_path` est fourni),
-    puis bascule sur le backend local (Ollama, `fallback_llm_client`) si le
-    Mac est injoignable ou si la génération échoue.
+    agent (/presse, /renault, /ia, et tout futur agent).
 
-    Le vocal du repli Ollama passe par Piper (local sur le Pi, cf.
-    capucine/tts_piper.py) si `piper_model_path` est fourni — jamais de SSH
-    ni de dépendance au Mac pour ce chemin. `piper_model_path` vide (défaut)
-    = texte seul en repli, comportement d'origine avant l'ajout de Piper.
+    Texte : serveur LLM du Mac (port 1234) si le Mac est joignable, sinon ou
+    en cas d'échec backend local (Ollama, `fallback_llm_client`).
+    Vocal (si `voice_output_path`) : choisi indépendamment du texte, cf.
+    _generate_voice.
     """
     mac_available = False
     if mac_config is not None:
@@ -158,21 +155,47 @@ def generate_digest(
             # lève ValueError) : ne doit jamais empêcher le repli Ollama, seulement le signaler.
             logger.exception("[digest] Échec de la détection de disponibilité du Mac, repli sur le backend local")
 
+    response = None
     if mac_available:
         try:
             response = generate_text_fn(mac_config, prompt)
         except Exception:  # noqa: BLE001 — un échec côté Mac ne doit jamais empêcher le repli Ollama
             logger.exception("[digest] Échec génération sur le Mac, repli sur le backend local")
-        else:
-            voice_path = None
-            if voice_output_path is not None:
-                voice_path = generate_voice_fn(
-                    mac_config, text_for_speech(response.text), voice_output_path
-                )
-            return DigestResult(response=response, voice_path=voice_path)
+    if response is None:
+        response = fallback_llm_client.generate(prompt)
 
-    response = fallback_llm_client.generate(prompt)
     voice_path = None
-    if voice_output_path is not None and piper_model_path:
-        voice_path = generate_voice_piper_fn(text_for_speech(response.text), voice_output_path, piper_model_path)
+    if voice_output_path is not None:
+        voice_path = _generate_voice(
+            text_for_speech(response.text),
+            voice_output_path,
+            mac_config if mac_available else None,
+            piper_model_path,
+            generate_voice_fn,
+            generate_voice_piper_fn,
+        )
     return DigestResult(response=response, voice_path=voice_path)
+
+
+def _generate_voice(
+    speech_text: str,
+    voice_output_path: "str | Path",
+    mac_config: "MacConfig | None",
+    piper_model_path: "str | None",
+    generate_voice_fn,
+    generate_voice_piper_fn,
+) -> "Path | None":
+    """Qwen3-TTS sur le Mac dès qu'il est joignable (`mac_config` non None),
+    même si le texte vient d'Ollama : la voix Mac (mlx-audio) ne dépend pas
+    du serveur LLM du Mac — incident du 2026-10-04, serveur texte arrêté et
+    toutes les revues basculées sur Piper alors que le Mac répondait.
+    Piper (local au Pi, cf. capucine/tts_piper.py) si le Mac est injoignable
+    ou si sa voix échoue ; pas de vocal si `piper_model_path` est vide."""
+    if mac_config is not None:
+        voice_path = generate_voice_fn(mac_config, speech_text, voice_output_path)
+        if voice_path is not None:
+            return voice_path
+        logger.warning("[digest] Vocal Mac indisponible, repli sur Piper")
+    if piper_model_path:
+        return generate_voice_piper_fn(speech_text, voice_output_path, piper_model_path)
+    return None

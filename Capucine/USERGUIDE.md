@@ -70,6 +70,7 @@ pas de login applicatif.
   Si le message "Désolé, je n'ai pas pu comprendre le message vocal."
   apparaît malgré tout, c'est que les deux ont échoué (vocal inaudible,
   trop de bruit de fond...). La réponse vocale de `/presse` `/renault`
-  `/ia`, elle, a aussi un repli automatique (Piper, sur le Pi) si le Mac
-  est indisponible.
+  `/ia` est générée sur le Mac dès qu'il est allumé, même si le texte a dû
+  être rédigé sur le Pi. Elle passe sur la voix de secours du Pi (Piper)
+  seulement si le Mac est éteint ou si sa voix échoue.
 - **Voir les logs** : `sudo journalctl -u capucine.service -n 50 --no-pager`
