@@ -7,11 +7,14 @@ from capucine.digest import (
     build_prompt,
     format_for_telegram,
     generate_digest,
+    mark_entries_sent,
+    select_unseen_entries,
     text_for_speech,
 )
 from capucine.feeds import FeedEntry
 from capucine.llm.base import LLMResponse
 from capucine.mac_wake import MacConfig
+from capucine.store import Store
 
 
 def _mac_config() -> MacConfig:
@@ -229,3 +232,34 @@ def test_generate_digest_without_piper_model_path_has_no_voice_on_fallback(fake_
     )
 
     assert result.voice_path is None
+
+
+def _linked_entry(index: int) -> FeedEntry:
+    return FeedEntry(
+        source="Source",
+        title=f"Titre {index}",
+        link=f"https://example.com/{index}",
+        summary="résumé",
+        published=datetime.now(timezone.utc) - timedelta(minutes=index),
+    )
+
+
+def test_select_unseen_entries_excludes_articles_already_sent(tmp_path):
+    store = Store(tmp_path / "test.db")
+    store.mark_seen("presse", "https://example.com/1")
+
+    selected = select_unseen_entries(store, "presse", [_linked_entry(1), _linked_entry(2)])
+
+    assert [entry.link for entry in selected] == ["https://example.com/2"]
+
+
+def test_articles_beyond_the_cap_are_kept_for_the_next_run(tmp_path):
+    store = Store(tmp_path / "test.db")
+    entries = [_linked_entry(i) for i in range(MAX_ENTRIES_FOR_PROMPT + 3)]
+
+    first_run = select_unseen_entries(store, "presse", entries)
+    mark_entries_sent(store, "presse", first_run)
+    second_run = select_unseen_entries(store, "presse", entries)
+
+    assert len(first_run) == MAX_ENTRIES_FOR_PROMPT
+    assert len(second_run) == 3

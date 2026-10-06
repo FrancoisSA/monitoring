@@ -98,3 +98,19 @@ def test_mark_seen_twice_does_not_raise(tmp_path):
     store.mark_seen("renault", "https://example.com/article")  # ne doit pas lever d'erreur
 
     assert store.has_seen("renault", "https://example.com/article") is True
+
+
+def test_purge_old_seen_links_removes_only_old_links(tmp_path):
+    store = Store(tmp_path / "test.db")
+    store.mark_seen("presse", "https://example.com/ancien")
+    store.mark_seen("presse", "https://example.com/recent")
+    with store._conn:
+        store._conn.execute(
+            "UPDATE seen_links SET seen_at = datetime('now', '-31 days') WHERE link = ?",
+            ("https://example.com/ancien",),
+        )
+
+    store.purge_old_seen_links(days=30)
+
+    assert store.has_seen("presse", "https://example.com/ancien") is False
+    assert store.has_seen("presse", "https://example.com/recent") is True

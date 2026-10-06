@@ -8,7 +8,13 @@ from typing import Callable
 
 from capucine.agents.base import AgentResponse
 from capucine.deps import Deps
-from capucine.digest import build_prompt, format_for_telegram, generate_digest
+from capucine.digest import (
+    build_prompt,
+    format_for_telegram,
+    generate_digest,
+    mark_entries_sent,
+    select_unseen_entries,
+)
 from capucine.feeds import FeedEntry, fetch_recent_entries
 from capucine.llm.base import LLMClient
 from capucine.mac_wake import MacConfig
@@ -43,10 +49,14 @@ class PresseAgent:
         self.piper_model_path = piper_model_path
 
     def handle(self, args: str, deps: Deps) -> AgentResponse:
-        entries = self.fetch_entries(self.feed_urls)
+        entries = select_unseen_entries(deps.store, self.name, self.fetch_entries(self.feed_urls))
         if not entries:
+            # notify=False : pas de message proactif vide lors des envois
+            # planifiés (4 par jour) ; un /presse tapé à la main répond
+            # quand même (cf. AgentResponse.notify, agents/base.py).
             return AgentResponse(
-                text="Aucune actualité récente trouvée sur les flux automobile électrique suivis."
+                text="Rien de nouveau sur l'automobile électrique depuis la dernière revue.",
+                notify=False,
             )
 
         prompt = build_prompt(entries)
@@ -58,6 +68,7 @@ class PresseAgent:
             voice_output_path=Path(f"/tmp/capucine-voice-{self.name}.ogg"),
             piper_model_path=self.piper_model_path,
         )
+        mark_entries_sent(deps.store, self.name, entries)
 
         return AgentResponse(
             text=format_for_telegram(result.response.text, _TELEGRAM_TITLE),

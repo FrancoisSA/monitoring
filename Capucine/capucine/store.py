@@ -126,6 +126,17 @@ class Store:
                 (agent, link),
             )
 
+    def purge_old_seen_links(self, days: int = 30) -> None:
+        """Évite que seen_links grossisse indéfiniment (plusieurs revues
+        par jour). `days` doit rester bien supérieur à la fenêtre de
+        récupération des flux (30h /presse /ia, 72h /renault) : un lien
+        purgé encore présent dans un flux serait renvoyé comme nouveau."""
+        with self._conn:
+            self._conn.execute(
+                "DELETE FROM seen_links WHERE seen_at < datetime('now', ?)",
+                (f"-{days} days",),
+            )
+
     # ─────────────────────────────────────────────────────────────
     # Notes de weekends — fallback SQLite (source de vérité = Google
     # Calendar, cf. capucine/google_calendar.py).

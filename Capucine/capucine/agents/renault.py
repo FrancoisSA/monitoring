@@ -10,7 +10,13 @@ from urllib.parse import urlencode
 
 from capucine.agents.base import AgentResponse
 from capucine.deps import Deps
-from capucine.digest import build_prompt, format_for_telegram, generate_digest
+from capucine.digest import (
+    build_prompt,
+    format_for_telegram,
+    generate_digest,
+    mark_entries_sent,
+    select_unseen_entries,
+)
 from capucine.feeds import FeedEntry, fetch_recent_entries
 from capucine.llm.base import LLMClient
 from capucine.mac_wake import MacConfig
@@ -49,9 +55,7 @@ class RenaultAgent:
         feed_urls = [google_news_search_url(query) for query in self.search_queries]
         entries = self.fetch_entries(feed_urls, since_hours=_SINCE_HOURS)
 
-        new_entries = [entry for entry in entries if not deps.store.has_seen(self.name, entry.link)]
-        for entry in new_entries:
-            deps.store.mark_seen(self.name, entry.link)
+        new_entries = select_unseen_entries(deps.store, self.name, entries)
 
         if not new_entries:
             return AgentResponse(
@@ -68,6 +72,7 @@ class RenaultAgent:
             voice_output_path=Path(f"/tmp/capucine-voice-{self.name}.ogg"),
             piper_model_path=self.piper_model_path,
         )
+        mark_entries_sent(deps.store, self.name, new_entries)
 
         return AgentResponse(
             text=format_for_telegram(result.response.text, _TELEGRAM_TITLE),

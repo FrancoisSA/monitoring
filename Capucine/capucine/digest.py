@@ -21,6 +21,7 @@ from capucine.llm.base import LLMClient, LLMResponse
 from capucine.mac_generate import generate_text_on_mac, generate_voice_on_mac
 from capucine.mac_wake import MacConfig, wait_for_mac
 from capucine.prompts import load_prompt
+from capucine.store import Store
 from capucine.tts_piper import generate_voice_with_piper
 
 logger = logging.getLogger(__name__)
@@ -48,12 +49,32 @@ def format_entries(entries: "list[FeedEntry]") -> str:
     )
 
 
+def _most_recent(entries: "list[FeedEntry]") -> "list[FeedEntry]":
+    """Trie par récence et plafonne à MAX_ENTRIES_FOR_PROMPT — cf. le
+    commentaire de module sur la fiabilité du modèle local au-delà."""
+    return sorted(entries, key=lambda entry: entry.published, reverse=True)[:MAX_ENTRIES_FOR_PROMPT]
+
+
 def build_prompt(entries: "list[FeedEntry]") -> str:
-    """Trie par récence et plafonne à MAX_ENTRIES_FOR_PROMPT avant de
-    construire le prompt — cf. le commentaire de module sur la fiabilité du
-    modèle local au-delà de ce plafond."""
-    most_recent = sorted(entries, key=lambda entry: entry.published, reverse=True)
-    return PROMPT_TEMPLATE.format(articles=format_entries(most_recent[:MAX_ENTRIES_FOR_PROMPT]))
+    return PROMPT_TEMPLATE.format(articles=format_entries(_most_recent(entries)))
+
+
+def select_unseen_entries(store: Store, agent_name: str, entries: "list[FeedEntry]") -> "list[FeedEntry]":
+    """Articles jamais envoyés par cet agent, déjà plafonnés comme dans
+    build_prompt : les revues tournent plusieurs fois par jour sur une
+    fenêtre de flux plus longue que l'intervalle entre deux envois, sans ce
+    filtre chaque revue répéterait la précédente. Les articles au-delà du
+    plafond ne sont pas marqués vus et passeront à la revue suivante."""
+    unseen = [entry for entry in entries if not store.has_seen(agent_name, entry.link)]
+    return _most_recent(unseen)
+
+
+def mark_entries_sent(store: Store, agent_name: str, entries: "list[FeedEntry]") -> None:
+    """À appeler seulement APRÈS une génération réussie : marquer avant
+    ferait perdre définitivement les articles si le LLM échoue."""
+    for entry in entries:
+        store.mark_seen(agent_name, entry.link)
+    store.purge_old_seen_links()
 
 
 def format_for_telegram(raw_text: str, title: str, now: "datetime | None" = None) -> str:

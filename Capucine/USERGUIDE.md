@@ -22,9 +22,14 @@ vocal.
 
 Sans rien demander, Capucine envoie :
 - `/presse` et `/ia` à **7h, 10h30, 15h et 18h**
-- `/renault` **toutes les heures**, uniquement s'il y a du nouveau
+- `/renault` **toutes les heures**
 
-Ces commandes restent utilisables à la demande à tout moment.
+Chaque revue ne contient que les articles **jamais envoyés** : pas de
+répétition d'une revue à l'autre. S'il n'y a rien de nouveau, aucun message
+n'est envoyé.
+
+Ces commandes restent utilisables à la demande à tout moment. Tapées à la
+main, elles répondent "Rien de nouveau…" si tout a déjà été envoyé.
 
 ## Vocal
 

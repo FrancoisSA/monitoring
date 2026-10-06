@@ -1,5 +1,7 @@
 from datetime import datetime, timezone
 
+import pytest
+
 from capucine.agents.renault import RenaultAgent, google_news_search_url
 from capucine.feeds import FeedEntry
 
@@ -75,3 +77,17 @@ def test_renault_uses_its_own_llm_client_when_provided(deps, fake_llm):
 
     assert "réponse dédiée" in response.text
     assert fake_llm.calls == []
+
+
+def test_renault_keeps_articles_for_next_run_when_generation_fails(deps, store, fake_llm):
+    def failing_generate(prompt):
+        raise RuntimeError("LLM injoignable")
+
+    fake_llm.generate = failing_generate
+    entry = _entry("https://example.com/article-1")
+    agent = RenaultAgent(search_queries=["Renault"], fetch_entries=lambda urls, since_hours: [entry])
+
+    with pytest.raises(RuntimeError):
+        agent.handle("", deps)
+
+    assert store.has_seen("renault", "https://example.com/article-1") is False

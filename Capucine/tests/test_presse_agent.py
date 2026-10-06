@@ -1,6 +1,8 @@
 from datetime import datetime, timezone
 from pathlib import Path
 
+import pytest
+
 from capucine.agents.presse import PresseAgent
 from capucine.digest import DigestResult
 from capucine.feeds import FeedEntry
@@ -46,7 +48,8 @@ def test_presse_with_no_entries_does_not_call_the_llm(deps, fake_llm):
     response = agent.handle("", deps)
 
     assert fake_llm.calls == []
-    assert "Aucune actualité récente" in response.text
+    assert "Rien de nouveau" in response.text
+    assert response.notify is False
 
 
 def test_presse_uses_its_own_llm_client_when_provided(deps, fake_llm):
@@ -89,3 +92,26 @@ def test_presse_passes_mac_config_and_voice_output_path_to_generate_digest(deps,
     assert captured["mac_config"] is mac_config
     assert captured["voice_output_path"] == Path("/tmp/capucine-voice-presse.ogg")
     assert response.voice_path == Path("/tmp/capucine-voice-presse.ogg")
+
+
+def test_presse_does_not_repeat_articles_already_sent(deps, fake_llm):
+    agent = PresseAgent(feed_urls=["https://feed.example"], fetch_entries=lambda urls: [_entry("Titre")])
+    agent.handle("", deps)
+
+    response = agent.handle("", deps)
+
+    assert len(fake_llm.calls) == 1
+    assert response.notify is False
+
+
+def test_presse_keeps_articles_for_next_run_when_generation_fails(deps, fake_llm):
+    def failing_generate(prompt):
+        raise RuntimeError("LLM injoignable")
+
+    fake_llm.generate = failing_generate
+    agent = PresseAgent(feed_urls=["https://feed.example"], fetch_entries=lambda urls: [_entry("Titre")])
+
+    with pytest.raises(RuntimeError):
+        agent.handle("", deps)
+
+    assert deps.store.has_seen(agent.name, "https://example.com") is False
