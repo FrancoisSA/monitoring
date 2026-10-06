@@ -1,6 +1,6 @@
 # Capucine — Manuel utilisateur
 
-Dernière mise à jour : 30 septembre 2026
+Dernière mise à jour : 6 octobre 2026
 
 Capucine est un assistant personnel qui répond sur Telegram, hébergé sur le
 Raspberry Pi. Tout se passe dans la conversation avec le bot — texte ou
@@ -17,6 +17,14 @@ vocal.
 | `/renault` | Veille Renault / Ampere |
 | `/ia` | Digest actualité IA & frameworks agentiques |
 | `/agenda <demande>` | Calendrier et tâches, en langage naturel |
+
+### Envois automatiques
+
+Sans rien demander, Capucine envoie :
+- `/presse` et `/ia` à **7h, 10h30, 15h et 18h**
+- `/renault` **toutes les heures**, uniquement s'il y a du nouveau
+
+Ces commandes restent utilisables à la demande à tout moment.
 
 ## Vocal
 
