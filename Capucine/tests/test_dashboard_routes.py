@@ -7,6 +7,7 @@ from capucine.store import Store
 
 class FakeCalendar:
     timezone = "Europe/Paris"
+    last_list_args = None
 
     def __init__(self, events=None):
         self._events = events or []
@@ -14,6 +15,7 @@ class FakeCalendar:
         self.weekend_deletes = []
 
     def list_events(self, days_ahead, max_results):
+        self.last_list_args = (days_ahead, max_results)
         return self._events
 
     def upsert_weekend_note(self, sat_date, note):
@@ -62,7 +64,7 @@ def _make_app(tmp_path, valid_credentials, monkeypatch, calendar=None, tasks=Non
         calendar_agenda_pro_name="Ampere", extra_calendar_names=[], calendar_reminder_advance_minutes=20,
         agenda_ollama_model="x", agenda_llm_timeout=1,
         dashboard_port=9192, oauth_redirect_uri="http://localhost:9192/auth/callback",
-        dashboard_cache_ttl_seconds=0,
+        dashboard_cache_ttl_seconds=0, events_max_results=1000,
         pi_whisper_cli_path="", pi_whisper_model_path="", pi_stt_timeout_s=1,
     )
 
@@ -206,3 +208,25 @@ def test_api_events_are_enriched(tmp_path, monkeypatch):
 
     body = response.get_json()
     assert body[0]["time_display"] == "14:00"
+
+
+def test_api_events_clamps_requested_limits(tmp_path, monkeypatch):
+    calendar = FakeCalendar()
+    app = _make_app(tmp_path, valid_credentials=True, monkeypatch=monkeypatch, calendar=calendar)
+    client = app.test_client()
+
+    client.get("/api/events?days_ahead=99999&max_results=99999")
+    assert calendar.last_list_args == (400, 1000)
+
+    client.get("/api/events?days_ahead=-5&max_results=0")
+    assert calendar.last_list_args == (1, 1)
+
+
+def test_api_events_allows_twelve_months_with_large_limit(tmp_path, monkeypatch):
+    calendar = FakeCalendar()
+    app = _make_app(tmp_path, valid_credentials=True, monkeypatch=monkeypatch, calendar=calendar)
+    client = app.test_client()
+
+    client.get("/api/events?days_ahead=365&max_results=1000")
+
+    assert calendar.last_list_args == (365, 1000)

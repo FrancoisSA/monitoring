@@ -50,6 +50,9 @@ from capucine.store import Store
 
 logger = logging.getLogger(__name__)
 
+# Horizon maximal demandable à /api/events (jours) : 12 mois + marge.
+_EVENTS_MAX_DAYS = 400
+
 # Noms français pour l'affichage des dates d'événements. `strftime("%A %d %B")`
 # dépend de la locale du système (le Pi tourne en locale C → nom en anglais),
 # et forcer locale.setlocale("fr_FR.UTF-8") exigerait que cette locale soit
@@ -305,8 +308,9 @@ def create_app(
 
     @app.route("/api/events")
     def api_events():
-        days_ahead = request.args.get("days_ahead", default=30, type=int)
-        max_results = request.args.get("max_results", default=50, type=int)
+        # Bornes serveur : le client ne peut pas réclamer un volume illimité.
+        days_ahead = min(max(request.args.get("days_ahead", default=30, type=int), 1), _EVENTS_MAX_DAYS)
+        max_results = min(max(request.args.get("max_results", default=50, type=int), 1), config.events_max_results)
         try:
             events = cache.get_or_set(
                 f"events:{days_ahead}:{max_results}",

@@ -1,6 +1,6 @@
 # Capucine — Manuel utilisateur
 
-Dernière mise à jour : 6 octobre 2026
+Dernière mise à jour : 12 octobre 2026
 
 Capucine est un assistant personnel qui répond sur Telegram, hébergé sur le
 Raspberry Pi. Tout se passe dans la conversation avec le bot — texte ou
@@ -58,6 +58,9 @@ Comprend le langage naturel pour :
 `http://FSA-PI5.local:9192` — vue d'ensemble des tâches, de l'agenda et des
 notes de weekend. Accessible uniquement depuis le réseau local ou Tailscale,
 pas de login applicatif.
+
+La page « Calendrier des weekends » (`/weekends`) affiche les événements des
+12 prochains mois (jusqu'à 1000 événements, réglable via `EVENTS_MAX_RESULTS`).
 
 ## En cas de souci
 

@@ -75,6 +75,7 @@ class Config:
     dashboard_port: int
     oauth_redirect_uri: str
     dashboard_cache_ttl_seconds: int
+    events_max_results: int
     pi_whisper_cli_path: str
     pi_whisper_model_path: str
     pi_stt_timeout_s: int
@@ -181,6 +182,10 @@ def load_config() -> Config:
         # capucine/cache.py). Inférieur au rafraîchissement client (60s) pour
         # rester réactif après une action utilisateur (tâche complétée...).
         dashboard_cache_ttl_seconds=int(os.getenv("DASHBOARD_CACHE_TTL_SECONDS", "30")),
+        # Plafond serveur du nombre d'événements renvoyés par /api/events. Doit
+        # couvrir 12 mois d'agenda (page weekends) sans laisser une requête
+        # réclamer un volume illimité à l'API Google.
+        events_max_results=int(os.getenv("EVENTS_MAX_RESULTS", "1000")),
         # Repli de transcription vocale en local sur le Pi (whisper.cpp) quand
         # le Mac est injoignable après le réveil WoL — cf. capucine/pi_stt.py.
         # Vide = repli désactivé (comportement d'origine : échec direct).

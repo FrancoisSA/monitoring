@@ -65,13 +65,13 @@ async function loadWeekendNotes() {
 }
 
 // Événements des 12 prochains mois, groupés par date_key — pour repérer les
-// weekends déjà occupés avant d'y noter un projet. max_results=100 = plafond
-// existant de l'API (cf. capucine/dashboard.py) : au-delà, seuls les
-// événements les plus proches dans le temps sont pris en compte.
+// weekends déjà occupés avant d'y noter un projet. max_results=1000 : un
+// plafond trop bas (100 auparavant) coupait l'affichage au bout de quelques
+// mois ; le serveur borne de toute façon à EVENTS_MAX_RESULTS.
 async function loadEvents() {
     eventsByDate = {};
     try {
-        const res = await fetch('/api/events?days_ahead=365&max_results=100');
+        const res = await fetch('/api/events?days_ahead=365&max_results=1000');
         const events = await res.json();
         if (events.error) throw new Error(events.error);
         events.forEach(ev => {
